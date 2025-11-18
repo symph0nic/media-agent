@@ -32,6 +32,20 @@ Found “The Block (AU)” S03E11. Redownload this episode?
 ```
 5. If confirmed, it deletes the existing file and triggers a Sonarr EpisodeSearch.
 
+### Show fully watched seasons
+Example:
+```
+What seasons are fully watched?
+```
+This will use Plex and Sonarr to bring back all seasons that are fully watched, showing how many episodes and how much storage they take up. This makes it easy to then run...
+
+### Tidy up Show Season X
+Example:
+```
+Tidy up Real Housewives of Salt Lake City S3
+```
+Upon confirmation this will delete and unmonitor the season of the show you have requested. If there's ambiguity in the name you'll be given the option to choose the right show.
+
 ### 🔍 Automatic Series Selection  
 Media Agent auto-selects the first matching show and only asks you to pick a different one if you choose **"Pick different show"**.
 
@@ -54,10 +68,8 @@ All natural-language interpretation passes through an OpenAI model (configurable
 
 ## 🚧 Features (Planned)
 
-- 🧹 **Tidy TV shows** (delete watched seasons / clean folder)  
 - 🎬 **Add movie** via Radarr  
-- 📺 **Add TV show** via Sonarr  
-- 🔁 **List fully-watched seasons** (Plex + Sonarr)  
+- 📺 **Add TV show** via Sonarr    
 - 🗑 **Empty NAS recycle bin** (QNAP / system maintenance)  
 - 🔧 Full logging & versioning  
 - 🧠 Model upgrades & response optimizations  

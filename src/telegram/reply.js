@@ -11,6 +11,51 @@ export function yesNoPickKeyboard(seriesList) {
   return { reply_markup: { inline_keyboard: buttons } };
 }
 
+// ─────────────────────────────────────────
+//  TIDY CONFIRMATION KEYBOARDS
+// ─────────────────────────────────────────
+
+export function yesNoPickTidyKeyboard(seriesList) {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "✅ Yes", callback_data: "tidy_yes" }],
+        [{ text: "❌ No", callback_data: "tidy_no" }],
+        [
+          {
+            text: "🔄 Pick Another Series",
+            callback_data: "tidy_pick"
+          }
+        ]
+      ]
+    }
+  };
+}
+
+export function seriesSelectionTidyKeyboard(seriesList) {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        ...seriesList.map((s) => [
+          {
+            text: s.title,
+            callback_data: `tidy_select|${s.id}`
+          }
+        ]),
+        [
+          {
+            text: "❌ Cancel",
+            callback_data: "tidy_cancelpick"
+          }
+        ]
+      ]
+    }
+  };
+}
+
+
+
+
 export function seriesSelectionKeyboard(seriesList) {
   const showButtons = seriesList.map((s) => [
     {

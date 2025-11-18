@@ -1,58 +1,43 @@
-import { handleRedownload } from "./tvHandler.js";
-import { clearStatus } from "../telegram/statusMessage.js";
-
+// src/router/intentRouter.js
+import { handleRedownload, handleListFullyWatched, handleTidySeason } from "./tvHandler.js";
 
 export async function routeIntent(bot, chatId, intentResult, statusId) {
   const { intent, entities } = intentResult;
 
   switch (intent) {
-
     case "add_movie":
-      await bot.sendMessage(
+      return bot.sendMessage(
         chatId,
-        `🎬 Add movie: *${entities.title}* (${entities.year ?? "unknown"})`,
-        { parse_mode: "Markdown" }
+        `Add movie: ${entities.title} (${entities.year ?? "year unknown"})`
       );
-      break;
 
     case "add_tv":
-      await bot.sendMessage(
+      return bot.sendMessage(
         chatId,
-        `📺 Add TV show: *${entities.title}*`,
-        { parse_mode: "Markdown" }
+        `Add TV show: ${entities.title}`
       );
-      break;
 
     case "tidy_tv":
-      await bot.sendMessage(
-        chatId,
-        `🧹 Tidy TV: *${entities.title}* (season ${entities.seasonNumber})`,
-        { parse_mode: "Markdown" }
-      );
-      break;
+      return handleTidySeason(bot, chatId, entities, statusId);
+;
 
     case "redownload_tv":
+      // pass statusId if you’re already using it in bot.js; if not, just drop statusId
       return handleRedownload(bot, chatId, entities, statusId);
 
     case "nas_empty_recycle_bin":
-      await bot.sendMessage(chatId, "🗑 Recycle bin empty pending implementation.");
-      break;
+      return bot.sendMessage(chatId, "Empty NAS recycle bin? (not implemented yet)");
 
     case "list_fully_watched_tv":
-      await bot.sendMessage(chatId, "👀 Checking fully watched TV seasons (not implemented).");
-      break;
+      return handleListFullyWatched(bot, chatId);
 
     case "help":
-      await bot.sendMessage(chatId, "ℹ️ Commands: redownload, add tv, add movie, tidy…");
-      break;
+      return bot.sendMessage(
+        chatId,
+        "Available commands: add tv, add movie, tidy, redownload, list fully watched…"
+      );
 
     default:
-      await bot.sendMessage(chatId, "🤖 I didn't understand that.");
-      break;
-  }
-
-  // Cleanup status for simple commands
-  if (statusId) {
-    await clearStatus(bot, chatId, statusId);
+      return bot.sendMessage(chatId, "Sorry, I didn’t understand that.");
   }
 }

@@ -69,4 +69,5 @@ export async function startTelegramBot(config) {
       console.error("Callback error:", err);
     }
   });
+   return bot;
 }

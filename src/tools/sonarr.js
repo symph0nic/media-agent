@@ -8,6 +8,7 @@ const client = axios.create({
   headers: { "X-Api-Key": config.SONARR_API_KEY }
 });
 
+
 export async function lookupSeries(term) {
   const { data } = await client.get(`/api/v3/series/lookup`, {
     params: { term }
@@ -24,11 +25,24 @@ export async function lookupSeries(term) {
 }
 
 export async function getEpisodes(seriesId) {
-  const { data } = await client.get(`/api/v3/episode`, {
-    params: { seriesId }
-  });
-  return data;
+  console.log("[DEBUG][getEpisodes] Request for seriesId:", seriesId);
+
+  try {
+    const res = await axios.get(
+      `${process.env.SONARR_URL}/api/v3/episode?seriesId=${seriesId}`,
+      { headers: { "X-Api-Key": process.env.SONARR_API_KEY } }
+    );
+
+    console.log("[DEBUG][getEpisodes] Got", res.data.length, "episodes");
+
+    return res.data;
+
+  } catch (err) {
+    console.error("[DEBUG][getEpisodes] ERROR fetching episodes:", err.message);
+    return [];
+  }
 }
+
 
 export function findEpisode(episodes, seasonNumber, episodeNumber) {
   if (episodeNumber === 0) {
@@ -61,3 +75,25 @@ export async function deleteEpisodeFile(episodeFileId) {
   const { data } = await client.delete(`/api/v3/episodefile/${episodeFileId}`);
   return data;
 }
+
+export async function getSeriesById(seriesId) {
+  if (!process.env.SONARR_URL || !process.env.SONARR_API_KEY) {
+    throw new Error("SONARR_URL or SONARR_API_KEY missing.");
+  }
+
+  const base = process.env.SONARR_URL.replace(/\/+$/, "");
+  const url = `${base}/api/v3/series/${seriesId}`;
+
+  const res = await axios.get(url, {
+    headers: {
+      "X-Api-Key": process.env.SONARR_API_KEY
+    }
+  });
+
+  return res.data;
+}
+
+export async function updateSeries(seriesId, seriesPayload) {
+  return await client.put(`/api/v3/series/${seriesId}`, seriesPayload);
+}
+

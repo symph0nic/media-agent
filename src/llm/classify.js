@@ -27,6 +27,7 @@ ${userText}
   }
 
   try {
+    console.log("CLASSIFIER RAW OUTPUT:", jsonText);
     return JSON.parse(jsonText);
   } catch (err) {
     console.error("Failed to parse JSON:", jsonText);

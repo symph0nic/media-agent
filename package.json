@@ -1,6 +1,6 @@
 {
   "name": "media-agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Natural-language media automation via Telegram (Sonarr, Radarr, OpenAI).",
   "type": "module",
   "main": "src/index.js",
@@ -11,7 +11,8 @@
     "axios": "^1.13.2",
     "dotenv": "^16.4.5",
     "node-telegram-bot-api": "^0.64.0",
-    "openai": "^4.56.0"
+    "openai": "^4.56.0",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

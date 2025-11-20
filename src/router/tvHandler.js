@@ -1,4 +1,5 @@
 // src/router/tvHandler.js
+
 import {
   getEpisodes,
   findEpisode,
@@ -6,120 +7,232 @@ import {
 } from "../tools/sonarr.js";
 
 import {
+  getCurrentlyWatchingShows,
+  getAllPlexShows,
+  getPlexSeasons,
+  fuzzyMatchCW
+} from "../tools/plex.js";
+
+import {
   updateStatus,
   clearStatus
 } from "../telegram/statusMessage.js";
 
-import { yesNoPickKeyboard, yesNoPickTidyKeyboard } from "../telegram/reply.js";
-import { pending } from "../state/pending.js";
+import {
+  yesNoPickKeyboard,
+  yesNoPickTidyKeyboard
+} from "../telegram/reply.js";
 
+import { pending } from "../state/pending.js";
 import { findSeriesInCache } from "../cache/sonarrCache.js";
-import { getAllPlexShows, getPlexSeasons } from "../tools/plex.js";
 import { loadConfig } from "../config.js";
+import { resolveCWAmbiguous } from "../llm/classify.js";
 
 const config = loadConfig();
 
-// Helper to format bytes as Gb (base-10)
+//
+// ─────────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────────
+//
+
 function formatGb(bytes) {
   if (!bytes || bytes <= 0) return "0Gb";
   const gb = bytes / 1_000_000_000;
   const roundedInt = Math.round(gb);
-  if (Math.abs(gb - roundedInt) < 0.05) {
-    return `${roundedInt}Gb`;
-  }
+  if (Math.abs(gb - roundedInt) < 0.05) return `${roundedInt}Gb`;
   return `${gb.toFixed(1)}Gb`;
 }
 
+//
 // ─────────────────────────────────────────────
-//  REDOWNLOAD WORKFLOW (existing, kept)
+//  REDOWNLOAD — ENTRY POINT
 // ─────────────────────────────────────────────
+//
 
 export async function handleRedownload(bot, chatId, entities, statusId) {
   const title = entities.title;
-  const season = entities.seasonNumber;
-  const episode = entities.episodeNumber;
+  const season = Number(entities.seasonNumber);
+  const episode = Number(entities.episodeNumber);
+  const reference = entities.reference || "";
 
   console.log("───────────── REDOWNLOAD DEBUG ─────────────");
-  console.log("[DEBUG] Incoming:", { title, season, episode });
-  console.log("[DEBUG] Cache size:", global.sonarrCache?.length);
+  console.log("[DEBUG] Incoming:", { title, season, episode, reference });
 
+  // Explicit = full title + S + E
+  const hasExplicitTitle = title && title.trim().length > 0;
+  const hasExplicitEpisode = season > 0 && episode > 0;
+
+  if (hasExplicitTitle && hasExplicitEpisode) {
+    console.log("[resolver] Explicit request → Sonarr flow");
+    return _explicitRedownload(bot, chatId, title, season, episode, statusId);
+  }
+
+  // Ambiguous fallback
+  if (reference.trim().length > 0) {
+    console.log("[resolver] Ambiguous request → resolver");
+    const resolved = await _ambiguousRedownload(bot, chatId, reference, statusId);
+
+    if (resolved === "fallback") {
+      console.log("[resolver] Ambiguous fallback → explicit attempt using reference");
+      return await _explicitRedownload(bot, chatId, reference, 0, 0, statusId);
+    }
+    return;
+  }
+
+  // Final fallback
+  await bot.sendMessage(chatId, "I couldn’t understand what you want to redownload.");
+  console.log("───────────── END DEBUG ─────────────\n");
+}
+
+//
+// ─────────────────────────────────────────────
+//  AMBIGUOUS RESOLVER
+// ─────────────────────────────────────────────
+//
+
+async function _ambiguousRedownload(bot, chatId, reference, statusId) {
+  const config = loadConfig();
+
+  console.log("[resolver] reference =", reference);
+
+  const cw = await getCurrentlyWatchingShows(config);
+  console.log("[resolver] Continue Watching count:", cw.length);
+
+  // Literal fuzzy first
+  const matches = fuzzyMatchCW(cw, reference.toLowerCase());
+  console.log("[resolver] CW fuzzy matches:", matches);
+
+  if (matches.length > 0) {
+    console.log("[resolver] Literal fuzzy match hit");
+    return await sendResolvedRedownload(bot, chatId, matches[0], matches.slice(1));
+  }
+
+  // Call LLM resolver
+  console.log("[resolver] No literal matches → invoking LLM");
+  const cwOptions = cw.map(item => ({
+    title: item.title,
+    season: item.seasonNumber,
+    episode: item.episodeNumber
+  }));
+
+  const llmResult = await resolveCWAmbiguous(config, reference, cwOptions);
+  console.log("[resolver] LLM result:", llmResult);
+
+  if (!llmResult || llmResult.best === "none") {
+    console.log("[resolver] LLM returned none → fallback");
+    return "fallback";
+  }
+
+  const best = cw.find(
+    x =>
+      x.title === llmResult.best.title &&
+      x.seasonNumber === llmResult.best.season &&
+      x.episodeNumber === llmResult.best.episode
+  );
+
+  if (!best) {
+    console.log("[resolver] LLM matched nothing in CW list → fallback");
+    return "fallback";
+  }
+
+  // LLM path = no alternatives
+  return await sendResolvedRedownload(bot, chatId, best, []);
+}
+
+//
+// ─────────────────────────────────────────────
+//  SEND RESOLVED CONFIRMATION
+// ─────────────────────────────────────────────
+//
+
+async function sendResolvedRedownload(bot, chatId, best, alternatives) {
+  const msg = `Found *${best.title}* — S${best.seasonNumber}E${best.episodeNumber}
+“${best.episodeTitle}”
+
+Redownload this episode?`;
+
+  const buttons = [
+    [
+      { text: "Yes", callback_data: "redl_yes_resolved" },
+      { text: "No", callback_data: "redl_no_resolved" }
+    ]
+  ];
+
+  if (alternatives.length > 0) {
+    buttons.push([{ text: "Pick another", callback_data: "redl_pick_resolved" }]);
+  }
+
+  pending[chatId] = {
+    mode: "redownload_resolved",
+    best,
+    alternatives
+  };
+
+  await bot.sendMessage(chatId, msg, {
+    parse_mode: "Markdown",
+    reply_markup: { inline_keyboard: buttons }
+  });
+}
+
+//
+// ─────────────────────────────────────────────
+//  EXPLICIT REDOWNLOAD WRAPPER
+// ─────────────────────────────────────────────
+//
+
+async function _explicitRedownload(bot, chatId, title, season, episode, statusId) {
+  console.log("[resolver] explicit → full Sonarr flow");
+  return await _runFullExplicitRedownload(bot, chatId, title, season, episode, statusId);
+}
+
+//
+// ─────────────────────────────────────────────
+//  FULL EXPLICIT REDOWNLOAD (Sonarr)
+// ─────────────────────────────────────────────
+//
+
+async function _runFullExplicitRedownload(bot, chatId, title, season, episode, statusId) {
   try {
-    //
-    // 1️⃣ SERIES LOOKUP (CACHE)
-    //
+    console.log("───────────── EXPLICIT REDOWNLOAD (Sonarr) ─────────────");
     console.log("[DEBUG] Searching cache for:", title);
+
+    // 1️⃣ SERIES LOOKUP
     const seriesList = findSeriesInCache(global.sonarrCache || [], title);
-
-    console.log("[DEBUG] Cache returned:", seriesList.length, "matches");
-    seriesList.forEach((s, i) => {
-      console.log(`  [${i}] ${s.title} (id=${s.id})`);
-    });
-
     if (!seriesList || seriesList.length === 0) {
-      console.log("[DEBUG] No matches in cache");
-      if (statusId) {
-        await updateStatus(bot, chatId, statusId, `No results for ${title}`);
-        await clearStatus(bot, chatId, statusId);
-      } else {
-        await bot.sendMessage(chatId, `No results for ${title}`);
-      }
+      await bot.sendMessage(chatId, `No results for ${title}`);
       return;
     }
 
-    const validSeries = seriesList.filter((s) => s.id);
-    console.log("[DEBUG] Valid series:", validSeries.length);
-
+    const validSeries = seriesList.filter(s => s.id);
     const selected = validSeries[0];
-    console.log("[DEBUG] Auto-selected:", selected);
 
     if (statusId) {
-      await updateStatus(
-        bot,
-        chatId,
-        statusId,
-        `Selected: ${selected.title}\nFetching episodes…`
-      );
+      await updateStatus(bot, chatId, statusId, `Selected: ${selected.title}\nFetching episodes…`);
     }
 
-    //
-    // 2️⃣ EPISODE LOOKUP
-    //
-    console.log("[DEBUG] Fetching episode list from Sonarr for series id:", selected.id);
-
+    // 2️⃣ EPISODES
     const episodes = await getEpisodes(selected.id);
-
     if (!episodes || episodes.length === 0) {
-      console.log("[ERROR] Episode list came back empty");
-    } else {
-      console.log("[DEBUG] Received", episodes.length, "episodes");
+      await bot.sendMessage(chatId, `No episodes found for ${selected.title}`);
+      return;
     }
 
-    console.log(`[DEBUG] Searching for S${season}E${episode}`);
-    const matches = findEpisode(episodes, season, episode);
+    // 3️⃣ MATCH EPISODE
+    let matches = [];
 
-    console.log("[DEBUG] Episode matches:", matches.length);
-    matches.forEach((m, i) =>
-      console.log(`  [${i}] Episode ID ${m.id} file=${m.episodeFileId}`)
-    );
+    if (season === 0 && episode === 0) {
+      console.log("[explicit] No season/episode supplied → skip matching");
+    } else {
+      matches = findEpisode(episodes, season, episode);
+    }
 
     if (statusId) {
-      await updateStatus(
-        bot,
-        chatId,
-        statusId,
-        `Matching episode S${season}E${episode}…`
-      );
+      await updateStatus(bot, chatId, statusId, `Matching episode S${season}E${episode}…`);
     }
 
-    //
-    // 3️⃣ IF NO EPISODE FOUND
-    //
     if (matches.length === 0) {
-      console.log("[DEBUG] Episode not found — proceeding with 'no episode' path");
-
-      if (statusId) {
-        await clearStatus(bot, chatId, statusId);
-      }
+      if (statusId) await clearStatus(bot, chatId, statusId);
 
       pending[chatId] = {
         mode: "redownload",
@@ -133,18 +246,15 @@ export async function handleRedownload(bot, chatId, entities, statusId) {
 
       await bot.sendMessage(
         chatId,
-        `Warning: Episode S${season}E${episode} not found for ${selected.title}.`
+        `Warning: Could not find episode S${season}E${episode} for ${selected.title}.`
       );
 
       return;
     }
 
     const ep = matches[0];
-    console.log("[DEBUG] Final chosen episode:", ep);
 
-    //
-    // 4️⃣ PREPARE CONFIRMATION
-    //
+    // 4️⃣ CONFIRMATION
     if (statusId) {
       await updateStatus(bot, chatId, statusId, "Preparing confirmation…");
       await clearStatus(bot, chatId, statusId);
@@ -160,26 +270,18 @@ export async function handleRedownload(bot, chatId, entities, statusId) {
       episodeFileId: ep.episodeFileId || 0
     };
 
-    console.log("[DEBUG] Pending state:", pending[chatId]);
-
-    console.log("[DEBUG] Sending confirmation dialog…");
-
     await bot.sendMessage(
       chatId,
       `Found ${selected.title} — Season ${season}, Episode ${episode}.\nRedownload this episode?`,
-      yesNoPickKeyboard(validSeries) // no parse_mode
+      yesNoPickKeyboard(validSeries)
     );
+
   } catch (err) {
-    console.error("[tvHandler] ERROR (caught):", err);
-    if (statusId) {
-      await updateStatus(bot, chatId, statusId, "Error during processing.");
-      await clearStatus(bot, chatId, statusId);
-    } else {
-      await bot.sendMessage(chatId, "Error during redownload processing.");
-    }
+    console.error("[tvHandler] ERROR (explicit redownload):", err);
+    await bot.sendMessage(chatId, "Error during redownload.");
   }
 
-  console.log("───────────── END DEBUG ─────────────\n");
+  console.log("───────────── END EXPLICIT REDOWNLOAD ─────────────\n");
 }
 
 // ─────────────────────────────────────────────
@@ -297,10 +399,10 @@ export async function handleListFullyWatched(bot, chatId) {
         }
 
         entry.seasons.push({
-          seasonNumber: sonarrSeason.seasonNumber,
-          episodeCount: stats.episodeCount,
-          sizeOnDisk: stats.sizeOnDisk
-        });
+            seasonNumber: sonarrSeason.seasonNumber,
+            episodeCount: stats.episodeCount,
+            sizeOnDisk: stats.sizeOnDisk
+          });
       }
     }
 

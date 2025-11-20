@@ -1,8 +1,15 @@
 // src/router/intentRouter.js
-import { handleRedownload, handleListFullyWatched, handleTidySeason } from "./tvHandler.js";
+import {
+  handleRedownload,
+  handleListFullyWatched,
+  handleTidySeason
+} from "./tvHandler.js";
+import { handleNasRecycleBin } from "./nasHandler.js";
 
 export async function routeIntent(bot, chatId, intentResult, statusId) {
-  const { intent, entities } = intentResult;
+  const { intent, entities,reference } = intentResult;
+
+  entities.reference = reference;
 
   switch (intent) {
     case "add_movie":
@@ -26,7 +33,7 @@ export async function routeIntent(bot, chatId, intentResult, statusId) {
       return handleRedownload(bot, chatId, entities, statusId);
 
     case "nas_empty_recycle_bin":
-      return bot.sendMessage(chatId, "Empty NAS recycle bin? (not implemented yet)");
+      return handleNasRecycleBin(bot, chatId);
 
     case "list_fully_watched_tv":
       return handleListFullyWatched(bot, chatId);

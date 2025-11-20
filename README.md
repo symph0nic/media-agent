@@ -18,6 +18,11 @@ Example:
 redownload the block season 3 episode 11
 
 ```
+Now supports fuzzy requests such as:
+```
+redo the latest housewives
+```
+...which will use the 'Continue Watching' feature in Plex to look at what shows are in progress and match from there.
 
 The bot:
 1. Understands the intent via LLM classification  
@@ -64,13 +69,15 @@ Perfect for debugging and visibility.
 ### 🤖 OpenAI-powered Intent Classification  
 All natural-language interpretation passes through an OpenAI model (configurable).
 
+### 🧹 NAS recycle-bin cleanup
+Ask “free up disk space” (or similar) and the bot will connect to your NAS over SSH, inspect every `@Recycle` folder across your configured shares, show item counts/sizes per share, and offer buttons to empty all bins or a specific one. This has been tested with QNAP but may(?) work with other types of NAS.
+
 ---
 
 ## 🚧 Features (Planned)
 
 - 🎬 **Add movie** via Radarr  
 - 📺 **Add TV show** via Sonarr    
-- 🗑 **Empty NAS recycle bin** (QNAP / system maintenance)  
 - 🔧 Full logging & versioning  
 - 🧠 Model upgrades & response optimizations  
 
@@ -129,7 +136,22 @@ SONARR_API_KEY=your-sonarr-api-key
 RADARR_URL=[http://your-radarr-host:7878](http://your-radarr-host:7878)
 RADARR_API_KEY=your-radarr-api-key
 
+NAS_SHARE_ROOTS=/share/CACHEDEV1_DATA,/share/CACHEDEV2_DATA
+# optional legacy fallback:
+# NAS_RECYCLE_PATH=/share/CACHEDEV1_DATA/@Recycle
+
+NAS_SSH_HOST=nas.local
+NAS_SSH_PORT=22
+NAS_SSH_USERNAME=admin
+# Supply EITHER NAS_SSH_PASSWORD or NAS_SSH_PRIVATE_KEY (multiline string with \n escapes)
+NAS_SSH_PASSWORD=
+NAS_SSH_PRIVATE_KEY=
+
 ```
+
+`NAS_SHARE_ROOTS` accepts a comma-separated list of volume/share roots. Media Agent scans each root for subdirectories containing an `@Recycle` folder, aggregates their sizes, and offers “clear all” or per-share deletion options during the workflow.
+
+SSH access is required so the container can list and delete files on the NAS. Provide host/port/username plus either a password or a private key (copy the entire key into `NAS_SSH_PRIVATE_KEY`, replacing literal newlines with `\n` if needed). The bot opens short-lived SSH sessions to enumerate recycle bins, compute sizes via `du`, and run `rm -rf` inside the NAS recycle directories.
 
 ---
 
@@ -151,6 +173,16 @@ docker run --env-file .env media-agent
 
 ```
 
+## 🧪 Testing
+
+Jest powers the automated test suite (unit + integration). Run:
+
+```
+npm test
+```
+
+The command enables Node's `--experimental-vm-modules` flag so ESM modules load correctly. The suite stubs all external dependencies (Telegram, OpenAI, Sonarr, Plex) and exercises cache utilities, router logic, TV workflows, and callback handling to guard against regressions whenever new features are added.
+
 ---
 
 ## 🧪 Example Commands
@@ -160,6 +192,7 @@ docker run --env-file .env media-agent
 redownload traitors uk s3e11
 redownload destination x season 1 episode 4
 redownload ozark s2e6
+free up disk space
 
 ```
 

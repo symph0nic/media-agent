@@ -13,7 +13,11 @@ export async function updateStatus(bot, chatId, messageId, text) {
   } catch (err) {
     // Ignore harmless Telegram errors
     const desc = err.response?.body?.description;
-    if (!desc?.includes("message is not modified")) {
+    const benign =
+      desc?.includes("message is not modified") ||
+      desc?.includes("message to edit not found") ||
+      desc?.includes("message can't be edited");
+    if (!benign) {
       console.error("Status update failed:", err);
     }
   }

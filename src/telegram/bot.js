@@ -7,6 +7,7 @@ import {
   updateStatus,
   clearStatus
 } from "../telegram/statusMessage.js";
+import os from "os";
 
 export async function startTelegramBot(config) {
   if (!config.TG_BOT_TOKEN) {
@@ -15,6 +16,18 @@ export async function startTelegramBot(config) {
 
   const bot = new TelegramBot(config.TG_BOT_TOKEN, { polling: true });
   console.log("[telegram] Bot polling started.");
+  
+
+  // After bot starts polling
+  bot.on("polling_error", console.error);
+
+  // Send startup message
+  bot.sendMessage(
+    config.ADMIN_CHAT_ID,
+    `🤖 *Media Agent is online*\nHost: ${os.hostname()}\nTime: ${new Date().toLocaleString()}`,
+    { parse_mode: "Markdown" }
+  );
+
 
   //
   // 🔹 Handle normal messages
@@ -48,6 +61,8 @@ export async function startTelegramBot(config) {
       // Step 2: Routing
       await updateStatus(bot, chatId, statusId, "📡 *Routing request…*");
       await routeIntent(bot, chatId, result, statusId);
+      await updateStatus(bot, chatId, statusId, "✅ *Request complete.*");
+      await clearStatus(bot, chatId, statusId);
 
     } catch (err) {
       console.error("[telegram] Error:", err);

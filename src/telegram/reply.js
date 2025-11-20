@@ -79,3 +79,30 @@ export function seriesSelectionKeyboard(seriesList) {
   };
 }
 
+export function nasPrimaryKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "✅ Clear all bins", callback_data: "nas_clear_all" }],
+        [{ text: "📂 Pick a bin", callback_data: "nas_clear_pick" }],
+        [{ text: "❌ Cancel", callback_data: "nas_clear_cancel" }]
+      ]
+    }
+  };
+}
+
+export function nasSelectionKeyboard(bins) {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        ...bins.map((bin, index) => [
+          {
+            text: bin.share,
+            callback_data: `nas_clear_select|${index}`
+          }
+        ]),
+        [{ text: "⬅️ Back", callback_data: "nas_clear_pick_cancel" }]
+      ]
+    }
+  };
+}

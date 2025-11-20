@@ -7,15 +7,18 @@ import {
   getSeriesById,
   updateSeries
 } from "../tools/sonarr.js";
+import { emptyRecycleBin } from "../tools/nas.js";
 import {
   yesNoPickKeyboard,
   seriesSelectionKeyboard,
   yesNoPickTidyKeyboard,
-  seriesSelectionTidyKeyboard
+  seriesSelectionTidyKeyboard,
+  nasSelectionKeyboard
 } from "../telegram/reply.js";
 import { safeEditMessage } from "../telegram/safeEdit.js";
-import { buildTidyConfirmation } from "../router/tvHandler.js";
+import { buildTidyConfirmation, handleRedownload } from "../router/tvHandler.js";
 import { loadConfig } from "../config.js";
+import { formatBytes } from "../tools/format.js";
 
 function formatGb(bytes) {
   if (!bytes || bytes <= 0) return "0Gb";
@@ -25,6 +28,33 @@ function formatGb(bytes) {
     return `${roundedInt}Gb`;
   }
   return `${gb.toFixed(1)}Gb`;
+}
+
+async function deleteSelectionMessage(bot, chatId, state) {
+  if (!state?.selectionMessageId) return;
+  try {
+    await bot.deleteMessage(chatId, state.selectionMessageId);
+  } catch (_) {
+    // ignore errors (already removed, etc.)
+  }
+  delete state.selectionMessageId;
+}
+
+async function updateSummaryMessage(bot, chatId, state, text) {
+  if (state?.summaryMessageId) {
+    await safeEditMessage(
+      bot,
+      chatId,
+      state.summaryMessageId,
+      text,
+      {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: [] }
+      }
+    );
+  } else {
+    await bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
+  }
 }
 
 export async function handleCallback(bot, query) {
@@ -192,6 +222,118 @@ export async function handleCallback(bot, query) {
     await bot.answerCallbackQuery(query.id);
     return;
   }
+
+  //
+// AMBIGUOUS RESOLVED – YES
+//
+if (data === "redl_yes_resolved") {
+  console.log("[callback] redl_yes_resolved");
+
+  const st = pending[chatId];
+  if (!st || st.mode !== "redownload_resolved") {
+    return bot.sendMessage(chatId, "Sorry, I lost track of what we were doing.");
+  }
+
+  const { best } = st;
+
+  // extract fields from best CW match
+  const title = best.title;
+  const season = best.seasonNumber;
+  const episode = best.episodeNumber;
+
+  // reuse explicit redownload handler
+  await handleRedownload(bot, chatId, {
+    title,
+    seasonNumber: season,
+    episodeNumber: episode,
+    reference: title
+  });
+
+  delete pending[chatId];
+  return;
+}
+
+//
+// AMBIGUOUS RESOLVED – NO
+//
+if (data === "redl_no_resolved") {
+  console.log("[callback] redl_no_resolved");
+
+  delete pending[chatId];
+  return bot.sendMessage(chatId, "Okay, cancelled.");
+}
+
+//
+// AMBIGUOUS RESOLVED – PICK ANOTHER
+//
+if (data === "redl_pick_resolved") {
+  console.log("[callback] redl_pick_resolved");
+
+  const st = pending[chatId];
+  if (!st || st.mode !== "redownload_resolved") {
+    return bot.sendMessage(chatId, "Sorry, I lost track of the alternatives.");
+  }
+
+  const { alternatives } = st;
+
+  if (!alternatives || alternatives.length === 0) {
+    return bot.sendMessage(chatId, "No other matching shows.");
+  }
+
+  // Build list of alternative buttons
+  const buttons = alternatives.map(alt => ([
+    {
+      text: `${alt.title} S${alt.seasonNumber}E${alt.episodeNumber}`,
+      callback_data: `redl_pick_specific_${alt.ratingKey}`
+    }
+  ]));
+
+  // Add cancel
+  buttons.push([{ text: "Cancel", callback_data: "redl_cancel_resolved" }]);
+
+  return bot.sendMessage(chatId, "Which show did you mean?", {
+    reply_markup: { inline_keyboard: buttons }
+  });
+}
+
+//
+// PICK SPECIFIC ALTERNATIVE
+//
+if (data.startsWith("redl_pick_specific_")) {
+  const ratingKey = data.replace("redl_pick_specific_", "");
+  console.log("[callback] redl_pick_specific →", ratingKey);
+
+  const st = pending[chatId];
+  if (!st || st.mode !== "redownload_resolved") {
+    return bot.sendMessage(chatId, "Sorry, I don't have the alternative list anymore.");
+  }
+
+  const chosen = st.alternatives.find(a => a.ratingKey === ratingKey);
+  if (!chosen) {
+    return bot.sendMessage(chatId, "Couldn't find that episode anymore.");
+  }
+
+  delete pending[chatId];
+
+  // Now run explicit redownload with the chosen match
+  return handleRedownload(bot, chatId, {
+    title: chosen.title,
+    seasonNumber: chosen.seasonNumber,
+    episodeNumber: chosen.episodeNumber,
+    reference: chosen.title
+  });
+}
+
+//
+// CANCEL (resolved path)
+//
+if (data === "redl_cancel_resolved") {
+  console.log("[callback] redl_cancel_resolved");
+
+  delete pending[chatId];
+  return bot.sendMessage(chatId, "Cancelled.");
+}
+
 
    //
 // 🔹 USER CONFIRMS: TIDY SEASON
@@ -444,6 +586,157 @@ if (action === "tidy_cancelpick") {
     "❌ Selection cancelled."
   );
 
+  await bot.answerCallbackQuery(query.id);
+  return;
+}
+
+//
+// 🔹 NAS RECYCLE BIN — CLEAR ALL
+//
+if (action === "nas_clear_all") {
+  if (!state || state.mode !== "nas_empty") {
+    await bot.answerCallbackQuery(query.id, { text: "No recycle-bin request pending." });
+    return;
+  }
+
+  await bot.answerCallbackQuery(query.id, { text: "Starting cleanup…" });
+
+  try {
+    await bot.sendChatAction(chatId, "typing");
+    const config = loadConfig();
+    await updateSummaryMessage(
+      bot,
+      chatId,
+      state,
+      "🧼 Clearing all NAS recycle bins… please wait."
+    );
+
+    const results = [];
+    for (const bin of state.bins || []) {
+      const deletedEntries = await emptyRecycleBin(bin.recyclePath, config);
+      results.push({
+        share: bin.share,
+        deletedEntries,
+        freedBytes: bin.summary?.totalBytes ?? 0
+      });
+    }
+
+    const totalFreed = results.reduce((sum, r) => sum + r.freedBytes, 0);
+
+    const lines = [];
+    lines.push("🧼 *Cleared all NAS recycle bins!*");
+    lines.push(`Freed approximately *${formatBytes(totalFreed)}*`);
+    lines.push("");
+    for (const res of results) {
+      lines.push(
+        `• ${res.share}: removed ${res.deletedEntries} top-level entries (${formatBytes(
+          res.freedBytes
+        )})`
+      );
+    }
+
+    await updateSummaryMessage(bot, chatId, state, lines.join("\n"));
+    await deleteSelectionMessage(bot, chatId, state);
+  } catch (err) {
+    console.error("[callback] Failed to empty NAS recycle bins:", err);
+    await updateSummaryMessage(
+      bot,
+      chatId,
+      state,
+      "❌ Could not empty the NAS recycle bins. Check NAS access and try again."
+    );
+  }
+
+  delete pending[chatId];
+  return;
+}
+
+//
+// 🔹 NAS RECYCLE BIN — PICK SHARE
+//
+if (action === "nas_clear_pick") {
+  if (!state || state.mode !== "nas_empty" || !state.bins?.length) {
+    await bot.answerCallbackQuery(query.id, { text: "No recycle-bin request pending." });
+    return;
+  }
+
+  await deleteSelectionMessage(bot, chatId, state);
+
+  const pickMsg = await bot.sendMessage(chatId, "Select which recycle bin to empty:", {
+    ...nasSelectionKeyboard(state.bins)
+  });
+  state.selectionMessageId = pickMsg.message_id;
+  await bot.answerCallbackQuery(query.id);
+  return;
+}
+
+//
+// 🔹 NAS RECYCLE BIN — CLEAR SPECIFIC SHARE
+//
+if (action === "nas_clear_select") {
+  if (!state || state.mode !== "nas_empty" || !state.bins?.length) {
+    await bot.answerCallbackQuery(query.id, { text: "No recycle-bin request pending." });
+    return;
+  }
+
+  const binIndex = Number(param);
+  const bin = state.bins[binIndex];
+
+  if (!bin) {
+    await bot.answerCallbackQuery(query.id, { text: "Invalid recycle bin." });
+    return;
+  }
+
+  await bot.answerCallbackQuery(query.id, { text: "Deleting…" });
+
+  try {
+    await bot.sendChatAction(chatId, "typing");
+    const config = loadConfig();
+    await updateSummaryMessage(
+      bot,
+      chatId,
+      state,
+      `🧼 Clearing recycle bin for *${bin.share}*… please wait.`
+    );
+    const deletedEntries = await emptyRecycleBin(bin.recyclePath, config);
+
+    const successText =
+      `🧼 *${bin.share}* recycle bin emptied!\n\n` +
+      `Removed entries: ${deletedEntries}\n` +
+      `Approx. freed space: *${formatBytes(bin.summary?.totalBytes ?? 0)}*`;
+
+    await updateSummaryMessage(bot, chatId, state, successText);
+    await deleteSelectionMessage(bot, chatId, state);
+  } catch (err) {
+    console.error("[callback] Failed to empty NAS recycle bin:", err);
+    await updateSummaryMessage(
+      bot,
+      chatId,
+      state,
+      `❌ Could not empty the recycle bin for ${bin.share}.`
+    );
+  }
+
+  delete pending[chatId];
+  return;
+}
+
+//
+// 🔹 NAS RECYCLE BIN — CANCEL PICK FLOW
+//
+if (action === "nas_clear_pick_cancel") {
+  await deleteSelectionMessage(bot, chatId, state);
+  await bot.answerCallbackQuery(query.id, { text: "Cancelled." });
+  return;
+}
+
+//
+// 🔹 NAS RECYCLE BIN — CANCEL ALL
+//
+if (action === "nas_clear_cancel") {
+  delete pending[chatId];
+  await safeEditMessage(bot, chatId, query.message.message_id, "❌ Recycle-bin cleanup cancelled.");
+  await deleteSelectionMessage(bot, chatId, state);
   await bot.answerCallbackQuery(query.id);
   return;
 }

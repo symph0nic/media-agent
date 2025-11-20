@@ -3,6 +3,15 @@ import dotenv from "dotenv";
 
 export function loadConfig() {
   dotenv.config();
+  const shareRoots = (process.env.NAS_SHARE_ROOTS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (shareRoots.length === 0 && process.env.NAS_RECYCLE_PATH) {
+    shareRoots.push(process.env.NAS_RECYCLE_PATH);
+  }
+
   return {
     TG_BOT_TOKEN: process.env.TG_BOT_TOKEN,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
@@ -16,6 +25,13 @@ export function loadConfig() {
     PLEX_TOKEN: process.env.PLEX_TOKEN,
     PLEX_TV_SECTION: process.env.PLEX_TV_SECTION,
     PLEX_MOVIE_SECTION: process.env.PLEX_MOVIE_SECTION,
-    ADMIN_CHAT_ID: process.env.ADMIN_CHAT_ID
+    ADMIN_CHAT_ID: process.env.ADMIN_CHAT_ID,
+
+    NAS_SHARE_ROOTS: shareRoots,
+    NAS_SSH_HOST: process.env.NAS_SSH_HOST,
+    NAS_SSH_PORT: Number(process.env.NAS_SSH_PORT || 22),
+    NAS_SSH_USERNAME: process.env.NAS_SSH_USERNAME,
+    NAS_SSH_PASSWORD: process.env.NAS_SSH_PASSWORD,
+    NAS_SSH_PRIVATE_KEY: process.env.NAS_SSH_PRIVATE_KEY
   };
 }

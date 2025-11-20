@@ -6,6 +6,8 @@ import {
   refreshSonarrCache,
   cacheIsFresh
 } from "./cache/sonarrCache.js";
+import { getCurrentlyWatchingShows } from "./tools/plex.js";
+
 
 function msUntilNextMidnight() {
   const now = new Date();
@@ -98,6 +100,9 @@ async function main() {
 
   // Schedule midnight refresh + Telegram notification
   scheduleMidnightCacheRefresh(config, bot);
+
+
+
 }
 
 main().catch((err) => {

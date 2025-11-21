@@ -70,7 +70,7 @@ Perfect for debugging and visibility.
 All natural-language interpretation passes through an OpenAI model (configurable).
 
 ### 🧹 NAS recycle-bin cleanup & disk space
-Ask “free up disk space” (or similar) and the bot will connect to your NAS over SSH, inspect every `@Recycle` folder across your configured shares, show item counts/sizes per share, and offer buttons to empty all bins or a specific one. Ask “how much disk space?” to see current usage and free space per share root. This has been tested with QNAP but may(?) work with other types of NAS.
+Ask “free up disk space” (or similar) and the bot will connect to your NAS over SSH, inspect every `@Recycle` folder across your configured shares, show item counts/sizes per share, and offer buttons to empty all bins or a specific one. Ask “how much disk space?” to see current usage and free space per share root. Math uses 1024-byte steps (aligned with `df`/QNAP), but labels stay KB/MB/GB/TB for readability. This has been tested with QNAP but may(?) work with other types of NAS.
 
 ### 🧹 qBittorrent cleanup
 Ask “delete unregistered torrents” and the bot will query qBittorrent for torrents whose trackers report “unregistered”, then prompt you to confirm deleting them (and their files). This can be scoped to movies or tv shows (based on qBittorrent categories) by asking "delete unregistered tv/movie torrents".

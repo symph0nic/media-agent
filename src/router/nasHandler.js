@@ -5,7 +5,7 @@ import {
   summarizeRecycleBin,
   getStorageStatus
 } from "../tools/nas.js";
-import { formatBytes, formatBytesDecimal } from "../tools/format.js";
+import { formatBytes } from "../tools/format.js";
 import {
   nasPrimaryKeyboard,
   nasSelectionKeyboard
@@ -181,7 +181,7 @@ export async function handleNasFreeSpace(bot, chatId) {
       const label = entry.path || entry.mount || "(unknown)";
       lines.push(`• \`${label}\``);
       lines.push(
-        `  ${bar} ${usedPct}% used — ${formatBytesDecimal(used)} / ${formatBytesDecimal(total)} (free: ${formatBytesDecimal(free)})`
+        `  ${bar} ${usedPct}% used — ${formatBytes(used)} / ${formatBytes(total)} (free: ${formatBytes(free)})`
       );
     }
 

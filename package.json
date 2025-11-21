@@ -1,6 +1,6 @@
 {
   "name": "media-agent",
-  "version": "0.3.0",
+  "version": "0.4.1",
   "description": "Natural-language media automation via Telegram (Sonarr, Radarr, OpenAI).",
   "type": "module",
   "main": "src/index.js",

@@ -3,6 +3,7 @@ export function formatBytes(bytes) {
     return "0 B";
   }
 
+  // Binary math (1024) but labeled using common KB/MB/GB/TB for readability
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
   let value = bytes;
   let idx = 0;
@@ -12,7 +13,8 @@ export function formatBytes(bytes) {
     idx++;
   }
 
-  const precision = value >= 10 || idx === 0 ? 0 : 1;
+  // For GiB/TiB show one decimal place to avoid aggressive rounding
+  const precision = idx >= 3 ? 1 : value >= 10 || idx === 0 ? 0 : 1;
   return `${value.toFixed(precision)} ${units[idx]}`;
 }
 

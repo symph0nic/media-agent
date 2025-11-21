@@ -1,7 +1,11 @@
 import { loadConfig } from "../config.js";
 import { pending } from "../state/pending.js";
-import { discoverRecycleBins, summarizeRecycleBin } from "../tools/nas.js";
-import { formatBytes } from "../tools/format.js";
+import {
+  discoverRecycleBins,
+  summarizeRecycleBin,
+  getStorageStatus
+} from "../tools/nas.js";
+import { formatBytes, formatBytesDecimal } from "../tools/format.js";
 import {
   nasPrimaryKeyboard,
   nasSelectionKeyboard
@@ -138,6 +142,55 @@ export async function handleNasRecycleBin(bot, chatId) {
     await bot.sendMessage(
       chatId,
       "Unable to read recycle-bin contents. Check NAS connectivity and permissions."
+    );
+  }
+}
+
+export async function handleNasFreeSpace(bot, chatId) {
+  const config = loadConfig();
+  const shareRoots = config.NAS_SHARE_ROOTS || [];
+
+  if (shareRoots.length === 0) {
+    await bot.sendMessage(
+      chatId,
+      "NAS paths are not configured. Set NAS_SHARE_ROOTS (comma-separated)."
+    );
+    return;
+  }
+
+  try {
+    const status = await getStorageStatus(shareRoots, config);
+
+    if (!status || status.length === 0) {
+      await bot.sendMessage(chatId, "Could not read NAS storage info.");
+      return;
+    }
+
+    const lines = [];
+    lines.push("💽 *NAS Storage*");
+    for (const entry of status) {
+      const total = Number(entry.totalBytes || 0);
+      const used = Number(entry.usedBytes || 0);
+      const free = total > 0 ? Math.max(0, total - used) : Number(entry.availableBytes || 0);
+      const pct = total > 0 ? Math.round((used / total) * 100) : Number(entry.usedPercent || 0);
+      const usedPct = Math.max(0, Math.min(100, pct));
+
+      const barLength = 10;
+      const filled = Math.round((usedPct / 100) * barLength);
+      const bar = "█".repeat(filled) + "░".repeat(barLength - filled);
+      const label = entry.path || entry.mount || "(unknown)";
+      lines.push(`• \`${label}\``);
+      lines.push(
+        `  ${bar} ${usedPct}% used — ${formatBytesDecimal(used)} / ${formatBytesDecimal(total)} (free: ${formatBytesDecimal(free)})`
+      );
+    }
+
+    await bot.sendMessage(chatId, lines.join("\n"), { parse_mode: "Markdown" });
+  } catch (err) {
+    console.error("[nas] Failed to fetch free space:", err);
+    await bot.sendMessage(
+      chatId,
+      "Unable to check NAS free space. Verify SSH configuration and permissions."
     );
   }
 }

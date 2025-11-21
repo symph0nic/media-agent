@@ -4,7 +4,8 @@ import {
   handleListFullyWatched,
   handleTidySeason
 } from "./tvHandler.js";
-import { handleNasRecycleBin } from "./nasHandler.js";
+import { handleNasRecycleBin, handleNasFreeSpace } from "./nasHandler.js";
+import { handleQbUnregistered } from "./qbittorrentHandler.js";
 
 export async function routeIntent(bot, chatId, intentResult, statusId) {
   const { intent, entities,reference } = intentResult;
@@ -34,6 +35,18 @@ export async function routeIntent(bot, chatId, intentResult, statusId) {
 
     case "nas_empty_recycle_bin":
       return handleNasRecycleBin(bot, chatId);
+
+    case "nas_check_free_space":
+      return handleNasFreeSpace(bot, chatId);
+
+    case "qb_delete_unregistered":
+      return handleQbUnregistered(bot, chatId, "all");
+
+    case "qb_delete_unregistered_tv":
+      return handleQbUnregistered(bot, chatId, "tv");
+
+    case "qb_delete_unregistered_movies":
+      return handleQbUnregistered(bot, chatId, "movies");
 
     case "list_fully_watched_tv":
       return handleListFullyWatched(bot, chatId);

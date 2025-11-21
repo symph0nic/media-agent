@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { Client as SSHClient } from "ssh2";
+import { execFile } from "child_process";
 
 const posixPath = path.posix || path;
 
@@ -344,4 +345,79 @@ export async function emptyRecycleBin(recyclePath, config = {}) {
   }
 
   return await emptyRecycleBinLocal(recyclePath);
+}
+
+function parseDfOutput(output) {
+  const lines = output.trim().split(/\n+/);
+  const entries = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].trim().split(/\s+/);
+    if (parts.length < 6) continue;
+    const [filesystem, blocks, used, available, percent, mount] = parts;
+    entries.push({ filesystem, blocks, used, available, percent, mount });
+  }
+  return entries;
+}
+
+async function getStorageStatusRemote(shareRoots = [], config) {
+  const rootsArg = shareRoots.map((r) => shellQuote(r)).join(" ");
+  const command = `/bin/df -P -B1 ${rootsArg}`;
+  const output = await runSshCommand(config, command);
+  if (!output) {
+    console.warn("[nas][ssh] df returned empty output for", shareRoots);
+  }
+  let entries = parseDfOutput(output || "");
+
+  // Fallback: full df and filter mounts matching roots
+  if (entries.length === 0) {
+    const fallbackOutput = await runSshCommand(config, "/bin/df -P -B1");
+    entries = parseDfOutput(fallbackOutput || "").filter((e) =>
+      shareRoots.some((root) => e.mount?.startsWith(root))
+    );
+  }
+
+  return entries.map((e) => ({
+    path: e.mount,
+    mount: e.mount,
+    totalBytes: Number(e.blocks || 0),
+    usedBytes: Number(e.used || 0),
+    availableBytes: Number(e.available || 0),
+    usedPercent: Number((e.percent || "0").replace(/%/g, ""))
+  }));
+}
+
+async function getStorageStatusLocal(shareRoots = []) {
+  const results = [];
+  for (const root of shareRoots) {
+    if (!root) continue;
+    try {
+      const { stdout } = await new Promise((resolve, reject) => {
+        execFile("df", ["-P", "-B1", root], (err, stdout, stderr) => {
+          if (err) return reject(err);
+          resolve({ stdout, stderr });
+        });
+      });
+      const entries = parseDfOutput(stdout || "");
+      entries.forEach((e) => {
+        results.push({
+          path: root,
+          mount: e.mount,
+          totalBytes: Number(e.blocks || 0),
+          usedBytes: Number(e.used || 0),
+          availableBytes: Number(e.available || 0),
+          usedPercent: Number((e.percent || "0").replace(/%/g, ""))
+        });
+      });
+    } catch (err) {
+      console.error("[nas][local] Failed to run df for", root, err.message);
+    }
+  }
+  return results;
+}
+
+export async function getStorageStatus(shareRoots = [], config = {}) {
+  if (hasSsh(config)) {
+    return await getStorageStatusRemote(shareRoots, config);
+  }
+  return await getStorageStatusLocal(shareRoots);
 }

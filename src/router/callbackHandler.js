@@ -19,6 +19,7 @@ import { safeEditMessage } from "../telegram/safeEdit.js";
 import { buildTidyConfirmation, handleRedownload } from "../router/tvHandler.js";
 import { loadConfig } from "../config.js";
 import { formatBytes } from "../tools/format.js";
+import { handleQbUnregisteredConfirm } from "./qbittorrentHandler.js";
 
 function formatGb(bytes) {
   if (!bytes || bytes <= 0) return "0Gb";
@@ -737,6 +738,38 @@ if (action === "nas_clear_cancel") {
   delete pending[chatId];
   await safeEditMessage(bot, chatId, query.message.message_id, "❌ Recycle-bin cleanup cancelled.");
   await deleteSelectionMessage(bot, chatId, state);
+  await bot.answerCallbackQuery(query.id);
+  return;
+}
+
+//
+// 🔹 QBittorrent — delete unregistered
+//
+if (data === "qb_unreg_yes") {
+  if (!state || state.mode !== "qb_unregistered") {
+    await bot.answerCallbackQuery(query.id, { text: "No pending qBittorrent cleanup." });
+    return;
+  }
+
+  await bot.answerCallbackQuery(query.id, { text: "Deleting…" });
+
+  if (state.summaryMessageId) {
+    await safeEditMessage(
+      bot,
+      chatId,
+      state.summaryMessageId,
+      "♻️ Deleting unregistered torrents…",
+      { parse_mode: "Markdown", reply_markup: { inline_keyboard: [] } }
+    );
+  }
+
+  await handleQbUnregisteredConfirm(bot, chatId, state);
+  return;
+}
+
+if (data === "qb_unreg_no") {
+  delete pending[chatId];
+  await safeEditMessage(bot, chatId, query.message.message_id, "❌ qBittorrent cleanup cancelled.");
   await bot.answerCallbackQuery(query.id);
   return;
 }

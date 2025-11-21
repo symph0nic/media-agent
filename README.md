@@ -69,8 +69,11 @@ Perfect for debugging and visibility.
 ### 🤖 OpenAI-powered Intent Classification  
 All natural-language interpretation passes through an OpenAI model (configurable).
 
-### 🧹 NAS recycle-bin cleanup
-Ask “free up disk space” (or similar) and the bot will connect to your NAS over SSH, inspect every `@Recycle` folder across your configured shares, show item counts/sizes per share, and offer buttons to empty all bins or a specific one. This has been tested with QNAP but may(?) work with other types of NAS.
+### 🧹 NAS recycle-bin cleanup & disk space
+Ask “free up disk space” (or similar) and the bot will connect to your NAS over SSH, inspect every `@Recycle` folder across your configured shares, show item counts/sizes per share, and offer buttons to empty all bins or a specific one. Ask “how much disk space?” to see current usage and free space per share root. This has been tested with QNAP but may(?) work with other types of NAS.
+
+### 🧹 qBittorrent cleanup
+Ask “delete unregistered torrents” and the bot will query qBittorrent for torrents whose trackers report “unregistered”, then prompt you to confirm deleting them (and their files). This can be scoped to movies or tv shows (based on qBittorrent categories) by asking "delete unregistered tv/movie torrents".
 
 ---
 
@@ -147,6 +150,12 @@ NAS_SSH_USERNAME=admin
 NAS_SSH_PASSWORD=
 NAS_SSH_PRIVATE_KEY=
 
+QBITTORRENT_URL=http://qbittorrent:8080
+QBITTORRENT_USERNAME=admin
+QBITTORRENT_PASSWORD=secret
+QBITTORRENT_TV_CATEGORY=tv-sonarr
+QBITTORRENT_MOVIE_CATEGORY=radarr
+
 ```
 
 `NAS_SHARE_ROOTS` accepts a comma-separated list of volume/share roots. Media Agent scans each root for subdirectories containing an `@Recycle` folder, aggregates their sizes, and offers “clear all” or per-share deletion options during the workflow.
@@ -193,6 +202,8 @@ redownload traitors uk s3e11
 redownload destination x season 1 episode 4
 redownload ozark s2e6
 free up disk space
+how much disk space
+delete unregistered torrents
 
 ```
 

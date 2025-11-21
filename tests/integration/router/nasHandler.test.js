@@ -3,10 +3,12 @@ import { createMockBot } from "../../helpers/mockBot.js";
 
 const mockSummarizeRecycleBin = jest.fn();
 const mockDiscoverRecycleBins = jest.fn();
+const mockGetStorageStatus = jest.fn();
 
 jest.unstable_mockModule("../../../src/tools/nas.js", () => ({
   summarizeRecycleBin: mockSummarizeRecycleBin,
-  discoverRecycleBins: mockDiscoverRecycleBins
+  discoverRecycleBins: mockDiscoverRecycleBins,
+  getStorageStatus: mockGetStorageStatus
 }));
 
 jest.unstable_mockModule("../../../src/config.js", () => ({
@@ -15,7 +17,7 @@ jest.unstable_mockModule("../../../src/config.js", () => ({
   })
 }));
 
-const { handleNasRecycleBin } = await import("../../../src/router/nasHandler.js");
+const { handleNasRecycleBin, handleNasFreeSpace } = await import("../../../src/router/nasHandler.js");
 const { pending } = await import("../../../src/state/pending.js");
 
 describe("handleNasRecycleBin", () => {
@@ -80,5 +82,30 @@ describe("handleNasRecycleBin", () => {
         expect.objectContaining({ share: "Backups" })
       ])
     });
+  });
+
+  test("reports NAS free space", async () => {
+    const bot = createMockBot({
+      sendMessage: jest.fn().mockResolvedValue({})
+    });
+
+    mockGetStorageStatus.mockResolvedValue([
+      {
+        path: "/nas/share1",
+        mount: "/nas/share1",
+        totalBytes: 1000,
+        usedBytes: 400,
+        availableBytes: 600,
+        usedPercent: 40
+      }
+    ]);
+
+    await handleNasFreeSpace(bot, 11);
+
+    expect(bot.sendMessage).toHaveBeenCalledWith(
+      11,
+      expect.stringContaining("NAS Storage"),
+      { parse_mode: "Markdown" }
+    );
   });
 });

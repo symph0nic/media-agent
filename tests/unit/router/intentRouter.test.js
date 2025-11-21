@@ -5,6 +5,8 @@ const mockHandleRedownload = jest.fn();
 const mockHandleListFullyWatched = jest.fn();
 const mockHandleTidySeason = jest.fn();
 const mockHandleNasRecycleBin = jest.fn();
+const mockHandleNasFreeSpace = jest.fn();
+const mockHandleQbUnregistered = jest.fn();
 
 jest.unstable_mockModule("../../../src/router/tvHandler.js", () => ({
   handleRedownload: mockHandleRedownload,
@@ -13,7 +15,12 @@ jest.unstable_mockModule("../../../src/router/tvHandler.js", () => ({
 }));
 
 jest.unstable_mockModule("../../../src/router/nasHandler.js", () => ({
-  handleNasRecycleBin: mockHandleNasRecycleBin
+  handleNasRecycleBin: mockHandleNasRecycleBin,
+  handleNasFreeSpace: mockHandleNasFreeSpace
+}));
+
+jest.unstable_mockModule("../../../src/router/qbittorrentHandler.js", () => ({
+  handleQbUnregistered: mockHandleQbUnregistered
 }));
 
 const { routeIntent } = await import("../../../src/router/intentRouter.js");
@@ -73,5 +80,23 @@ describe("routeIntent", () => {
     const bot = createMockBot();
     await routeIntent(bot, 9, { intent: "nas_empty_recycle_bin", entities: {}, reference: "" });
     expect(mockHandleNasRecycleBin).toHaveBeenCalledWith(bot, 9);
+  });
+
+  test("routes NAS free space intent", async () => {
+    const bot = createMockBot();
+    await routeIntent(bot, 10, { intent: "nas_check_free_space", entities: {}, reference: "" });
+    expect(mockHandleNasFreeSpace).toHaveBeenCalledWith(bot, 10);
+  });
+
+  test("routes qb unregistered intents with scopes", async () => {
+    const bot = createMockBot();
+    await routeIntent(bot, 11, { intent: "qb_delete_unregistered", entities: {}, reference: "" });
+    expect(mockHandleQbUnregistered).toHaveBeenCalledWith(bot, 11, "all");
+
+    await routeIntent(bot, 12, { intent: "qb_delete_unregistered_tv", entities: {}, reference: "" });
+    expect(mockHandleQbUnregistered).toHaveBeenCalledWith(bot, 12, "tv");
+
+    await routeIntent(bot, 13, { intent: "qb_delete_unregistered_movies", entities: {}, reference: "" });
+    expect(mockHandleQbUnregistered).toHaveBeenCalledWith(bot, 13, "movies");
   });
 });

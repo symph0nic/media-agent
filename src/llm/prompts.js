@@ -25,10 +25,18 @@ INTENT OPTIONS:
 - "add_tv"
 - "add_movie"
 - "nas_empty_recycle_bin"
+- "nas_check_free_space"
+- "qb_delete_unregistered"
+- "qb_delete_unregistered_tv"
+- "qb_delete_unregistered_movies"
 - "help"
 - "unknown"
 
 Use "nas_empty_recycle_bin" whenever the user asks to free up disk space, empty the NAS recycle bin, clear/reclaim storage, or otherwise references recycling/deleting general files on the NAS (not a specific show).
+Use "nas_check_free_space" when the user asks about disk space, storage capacity, free/remaining space, or how full the NAS is.
+Use "qb_delete_unregistered" when the user asks to clean up qBittorrent unregistered torrents.
+Use "qb_delete_unregistered_tv" when they mention cleaning up qBittorrent unregistered TV torrents (TV shows, series, qbit TV category).
+Use "qb_delete_unregistered_movies" when they mention cleaning up qBittorrent unregistered movie torrents (films, Radarr category).
 
 -------------------------
 ENTITY RULES:
@@ -88,6 +96,38 @@ Return:
   "intent": "nas_empty_recycle_bin",
   "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
   "reference": "free up disk space"
+}
+
+User: "how much disk space?"
+Return:
+{
+  "intent": "nas_check_free_space",
+  "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "how much disk space?"
+}
+
+User: "delete unregistered torrents"
+Return:
+{
+  "intent": "qb_delete_unregistered",
+  "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "delete unregistered torrents"
+}
+
+User: "delete unregistered tv torrents"
+Return:
+{
+  "intent": "qb_delete_unregistered_tv",
+  "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "delete unregistered tv torrents"
+}
+
+User: "clean up unregistered movies"
+Return:
+{
+  "intent": "qb_delete_unregistered_movies",
+  "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "clean up unregistered movies"
 }
 
 User: "redo the latest housewives"

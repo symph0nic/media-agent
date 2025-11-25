@@ -8,6 +8,14 @@ import {
   clearStatus
 } from "../telegram/statusMessage.js";
 import os from "os";
+import { readFileSync } from "fs";
+import path from "path";
+import url from "url";
+
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+const pkg = JSON.parse(
+  readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf8")
+);
 
 export async function startTelegramBot(config) {
   if (!config.TG_BOT_TOKEN) {
@@ -32,7 +40,7 @@ export async function startTelegramBot(config) {
   ];
 
   const startup = [
-    "🤖 *Media Agent is online*",
+    `🤖 *Media Agent v${pkg.version} is online*`,
     `Time: ${new Date().toLocaleString()}`,
     "",
     "*Try:*",

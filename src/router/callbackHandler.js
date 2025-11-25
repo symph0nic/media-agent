@@ -20,6 +20,7 @@ import { buildTidyConfirmation, handleRedownload } from "../router/tvHandler.js"
 import { loadConfig } from "../config.js";
 import { formatBytes } from "../tools/format.js";
 import { handleQbUnregisteredConfirm } from "./qbittorrentHandler.js";
+import { findSeriesInCache } from "../cache/sonarrCache.js";
 
 function formatGb(bytes) {
   if (!bytes || bytes <= 0) return "0Gb";
@@ -237,18 +238,70 @@ if (data === "redl_yes_resolved") {
 
   const { best } = st;
 
-  // extract fields from best CW match
   const title = best.title;
   const season = best.seasonNumber;
   const episode = best.episodeNumber;
 
-  // reuse explicit redownload handler
-  await handleRedownload(bot, chatId, {
-    title,
-    seasonNumber: season,
-    episodeNumber: episode,
-    reference: title
-  });
+  try {
+    const cache = global.sonarrCache || [];
+    const seriesList = findSeriesInCache(cache, title);
+    const selected = seriesList?.[0];
+
+    if (!selected) {
+      await safeEditMessage(
+        bot,
+        chatId,
+        query.message.message_id,
+        `Couldn't find "${title}" in Sonarr.`
+      );
+      delete pending[chatId];
+      return;
+    }
+
+    const episodes = await getEpisodes(selected.id);
+    const matches = findEpisode(episodes, season, episode);
+    if (!matches || matches.length === 0) {
+      await safeEditMessage(
+        bot,
+        chatId,
+        query.message.message_id,
+        `Couldn't find S${season}E${episode} for ${selected.title}.`
+      );
+      delete pending[chatId];
+      return;
+    }
+
+    const ep = matches[0];
+
+    // Remove existing file if present
+    if (ep.episodeFileId) {
+      try {
+        await deleteEpisodeFile(ep.episodeFileId);
+      } catch (err) {
+        console.error("Failed to delete episode file:", err.message);
+      }
+    }
+
+    const result = await runEpisodeSearch(ep.id);
+    const success = ["started", "queued"].includes(result?.status);
+
+    await safeEditMessage(
+      bot,
+      chatId,
+      query.message.message_id,
+      success
+        ? "🔁 Redownload started for the latest episode."
+        : "⚠️ Episode deletion done, but search may not have started."
+    );
+  } catch (err) {
+    console.error("[callback] redl_yes_resolved failed:", err);
+    await safeEditMessage(
+      bot,
+      chatId,
+      query.message.message_id,
+      "❌ Could not start redownload."
+    );
+  }
 
   delete pending[chatId];
   return;

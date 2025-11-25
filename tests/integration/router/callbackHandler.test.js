@@ -36,6 +36,12 @@ jest.unstable_mockModule("../../../src/router/tvHandler.js", () => ({
   handleRedownload: mockHandleRedownload
 }));
 
+const mockFindSeriesInCache = jest.fn();
+
+jest.unstable_mockModule("../../../src/cache/sonarrCache.js", () => ({
+  findSeriesInCache: mockFindSeriesInCache
+}));
+
 jest.unstable_mockModule("../../../src/config.js", () => ({
   loadConfig: () => ({})
 }));
@@ -49,6 +55,7 @@ describe("callbackHandler redownload actions", () => {
     mockSafeEditMessage.mockReset();
     mockDeleteEpisodeFile.mockReset();
     mockRunEpisodeSearch.mockReset();
+    mockFindSeriesInCache.mockReset();
   });
 
   test("redl_yes deletes file and starts episode search", async () => {
@@ -80,6 +87,43 @@ describe("callbackHandler redownload actions", () => {
       "🔁 Episode deleted and redownload started!"
     );
     expect(pending[1]).toBeUndefined();
+  });
+
+  test("redl_yes_resolved resolves to Sonarr episode and starts search", async () => {
+    const bot = createMockBot({
+      sendChatAction: jest.fn().mockResolvedValue(),
+      answerCallbackQuery: jest.fn().mockResolvedValue()
+    });
+
+    pending[3] = {
+      mode: "redownload_resolved",
+      best: { title: "Bake Off", seasonNumber: 1, episodeNumber: 2 }
+    };
+
+    mockFindSeriesInCache.mockReturnValue([{ id: 23, title: "Bake Off" }]);
+    const ep = { id: 99, seasonNumber: 1, episodeNumber: 2, episodeFileId: 5 };
+    mockGetEpisodes.mockResolvedValue([ep]);
+    mockFindEpisode.mockReturnValue([ep]);
+    mockRunEpisodeSearch.mockResolvedValue({ status: "queued" });
+
+    await handleCallback(bot, {
+      id: "cb",
+      data: "redl_yes_resolved",
+      message: { chat: { id: 3 }, message_id: 30 }
+    });
+
+    expect(mockFindSeriesInCache).toHaveBeenCalledWith([], "Bake Off");
+    expect(mockGetEpisodes).toHaveBeenCalledWith(23);
+    expect(mockFindEpisode).toHaveBeenCalledWith([ep], 1, 2);
+    expect(mockDeleteEpisodeFile).toHaveBeenCalledWith(5);
+    expect(mockRunEpisodeSearch).toHaveBeenCalledWith(99);
+    expect(mockSafeEditMessage).toHaveBeenCalledWith(
+      bot,
+      3,
+      30,
+      "🔁 Redownload started for the latest episode."
+    );
+    expect(pending[3]).toBeUndefined();
   });
 });
 

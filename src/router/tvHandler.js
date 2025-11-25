@@ -30,6 +30,18 @@ import { resolveCWAmbiguous } from "../llm/classify.js";
 
 const config = loadConfig();
 
+async function clearPendingPrompt(bot, chatId) {
+  const prev = pending[chatId];
+  if (prev?.messageId) {
+    try {
+      await bot.deleteMessage(chatId, prev.messageId);
+    } catch (_) {
+      // ignore
+    }
+  }
+  delete pending[chatId];
+}
+
 //
 // ─────────────────────────────────────────────
 //  HELPERS
@@ -163,16 +175,19 @@ Redownload this episode?`;
     buttons.push([{ text: "Pick another", callback_data: "redl_pick_resolved" }]);
   }
 
-  pending[chatId] = {
-    mode: "redownload_resolved",
-    best,
-    alternatives
-  };
+  await clearPendingPrompt(bot, chatId);
 
-  await bot.sendMessage(chatId, msg, {
+  const sent = await bot.sendMessage(chatId, msg, {
     parse_mode: "Markdown",
     reply_markup: { inline_keyboard: buttons }
   });
+
+  pending[chatId] = {
+    mode: "redownload_resolved",
+    best,
+    alternatives,
+    messageId: sent?.message_id
+  };
 }
 
 //
@@ -260,6 +275,8 @@ async function _runFullExplicitRedownload(bot, chatId, title, season, episode, s
       await clearStatus(bot, chatId, statusId);
     }
 
+    await clearPendingPrompt(bot, chatId);
+
     pending[chatId] = {
       mode: "redownload",
       selectedSeries: selected,
@@ -270,11 +287,13 @@ async function _runFullExplicitRedownload(bot, chatId, title, season, episode, s
       episodeFileId: ep.episodeFileId || 0
     };
 
-    await bot.sendMessage(
+    const sent = await bot.sendMessage(
       chatId,
       `Found ${selected.title} — Season ${season}, Episode ${episode}.\nRedownload this episode?`,
       yesNoPickKeyboard(validSeries)
     );
+
+    pending[chatId].messageId = sent?.message_id;
 
   } catch (err) {
     console.error("[tvHandler] ERROR (explicit redownload):", err);

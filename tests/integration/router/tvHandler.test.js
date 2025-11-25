@@ -106,8 +106,11 @@ describe("tvHandler redownload flow", () => {
 
   test("ambiguous reference uses continue watching fuzzy results", async () => {
     const bot = createMockBot({
-      sendMessage: jest.fn().mockResolvedValue({})
+      sendMessage: jest.fn().mockResolvedValue({ message_id: 200 }),
+      deleteMessage: jest.fn().mockResolvedValue()
     });
+
+    pending[1] = { mode: "redownload", messageId: 123 };
 
     mockGetCurrentlyWatchingShows.mockResolvedValue([
       {
@@ -135,6 +138,7 @@ describe("tvHandler redownload flow", () => {
       "status"
     );
 
+    expect(bot.deleteMessage).toHaveBeenCalledWith(1, 123);
     expect(bot.sendMessage).toHaveBeenCalledWith(
       1,
       expect.stringContaining("Found *Real Housewives*"),
@@ -142,7 +146,8 @@ describe("tvHandler redownload flow", () => {
     );
     expect(pending[1]).toMatchObject({
       mode: "redownload_resolved",
-      best: expect.objectContaining({ title: "Real Housewives" })
+      best: expect.objectContaining({ title: "Real Housewives" }),
+      messageId: 200
     });
   });
 });

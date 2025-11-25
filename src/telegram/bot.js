@@ -7,10 +7,10 @@ import {
   updateStatus,
   clearStatus
 } from "../telegram/statusMessage.js";
-import os from "os";
 import { readFileSync } from "fs";
 import path from "path";
 import url from "url";
+import { logInfo, logError } from "../logger.js";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -23,7 +23,7 @@ export async function startTelegramBot(config) {
   }
 
   const bot = new TelegramBot(config.TG_BOT_TOKEN, { polling: true });
-  console.log("[telegram] Bot polling started.");
+  logInfo("[telegram] Bot polling started.");
   
 
   // After bot starts polling
@@ -58,6 +58,9 @@ export async function startTelegramBot(config) {
     const text = msg.text?.trim();
     if (!text) return;
 
+    const started = Date.now();
+    logInfo(`[msg] chat=${chatId} text="${text.replace(/\s+/g, " ")}"`);
+
     // 🔹 Create unified status placeholder
     const statusId = await createStatus(
       bot,
@@ -78,15 +81,17 @@ export async function startTelegramBot(config) {
       // Step 1: Classification
       await updateStatus(bot, chatId, statusId, "🤖 *Classifying intent…*");
       const result = await classifyMessage(config, text);
+      logInfo(`[intent] chat=${chatId} intent=${result.intent}`);
 
       // Step 2: Routing
       await updateStatus(bot, chatId, statusId, "📡 *Routing request…*");
       await routeIntent(bot, chatId, result, statusId);
       await updateStatus(bot, chatId, statusId, "✅ *Request complete.*");
       await clearStatus(bot, chatId, statusId);
+      logInfo(`[done] chat=${chatId} intent=${result.intent} ms=${Date.now() - started}`);
 
     } catch (err) {
-      console.error("[telegram] Error:", err);
+      logError(`[error] chat=${chatId} err=${err.message}`);
       await updateStatus(bot, chatId, statusId, "❌ *Error processing request.*");
       await clearStatus(bot, chatId, statusId);
     } finally {
@@ -99,10 +104,11 @@ export async function startTelegramBot(config) {
   // 🔹 Handle callback buttons
   //
   bot.on("callback_query", async (query) => {
+    logInfo(`[cb] chat=${query.message.chat.id} data=${query.data}`);
     try {
       await handleCallback(bot, query);
     } catch (err) {
-      console.error("Callback error:", err);
+      logError(`Callback error: ${err.message}`);
     }
   });
    return bot;

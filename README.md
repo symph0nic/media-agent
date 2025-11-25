@@ -70,21 +70,18 @@ Perfect for debugging and visibility.
 All natural-language interpretation passes through an OpenAI model (configurable).
 
 ### 🧹 NAS recycle-bin cleanup & disk space
-Ask “free up disk space” (or similar) and the bot will connect to your NAS over SSH, inspect every `@Recycle` folder across your configured shares, show item counts/sizes per share, and offer buttons to empty all bins or a specific one. Ask “how much disk space?” to see current usage and free space per share root. Math uses 1024-byte steps (aligned with `df`/QNAP), but labels stay KB/MB/GB/TB for readability. This has been tested with QNAP but may(?) work with other types of NAS.
+Ask “free up disk space” and the bot SSHes to your NAS, finds every `@Recycle` under your configured share roots, and shows per-share size/counts. Tiny bins are auto-filtered (<1 MB & <10 files by default), with a “Show all bins” button and “Clear all” still covering everything. Ask “how much disk space?” to see current usage per share (1024-byte math, KB/MB/GB/TB labels).
 
 ### 🧹 qBittorrent cleanup
-Ask “delete unregistered torrents” and the bot will query qBittorrent for torrents whose trackers report “unregistered”, then prompt you to confirm deleting them (and their files). This can be scoped to movies or tv shows (based on qBittorrent categories) by asking "delete unregistered tv/movie torrents".
+Ask “delete unregistered torrents” and the bot lists tracker-unregistered torrents and asks for confirmation. Scope to TV or movies by saying “delete unregistered tv torrents” or “...movies”.
 
 ### ➕ Add shows or movies
-Ask “add severance” or “add the creator movie” and the bot will search Sonarr/Radarr, show a poster + overview, let you page through matches, and add the selected item using your default root folder and quality profile. Cards disappear when finished.
+Natural language add flow: “add severance” or “add the creator movie”. The bot searches Sonarr + Radarr, shows posters/overviews, lets you page results, switch between TV/Movie when both exist, and adds with your default root folder & quality profile. Cards clean up when done.
 
 ---
 
 ## 🚧 Features (Planned)
-
-- 🎬 **Add movie** via Radarr  
-- 📺 **Add TV show** via Sonarr    
-- 🔧 Full logging & versioning  
+ 
 - 🧠 Model upgrades & response optimizations  
 
 ---
@@ -147,6 +144,9 @@ SONARR_DEFAULT_ROOT=/tv
 SONARR_DEFAULT_PROFILE=HD-1080p
 RADARR_DEFAULT_ROOT=/movies
 RADARR_DEFAULT_PROFILE=Any
+# Skip tiny NAS recycle bins in the UI (Clear-all still empties everything)
+NAS_BIN_MIN_BYTES=1000000
+NAS_BIN_MIN_FILES=10
 
 NAS_SHARE_ROOTS=/share/CACHEDEV1_DATA,/share/CACHEDEV2_DATA
 # optional legacy fallback:
@@ -166,6 +166,9 @@ QBITTORRENT_TV_CATEGORY=tv-sonarr
 QBITTORRENT_MOVIE_CATEGORY=radarr
 
 # Sonarr/Radarr add-media uses the first available root folder and quality profile returned by each service.
+
+# Logging
+LOG_DIR=./logs
 
 ```
 
@@ -215,6 +218,8 @@ redownload ozark s2e6
 free up disk space
 how much disk space
 delete unregistered torrents
+add severance
+add the creator movie
 
 ```
 
@@ -240,7 +245,8 @@ The LLM produces:
     "title": "the block",
     "seasonNumber": 3,
     "episodeNumber": 11
-  }
+  },
+  "reference": "the block season 3 episode 11"
 }
 ````
 
@@ -272,9 +278,6 @@ MIT
 
 ## 🧭 Roadmap
 
-* Add Radarr add-movie flow
-* Add Sonarr add-series flow
-* Plex integration
 * Scheduled cleanup tasks
 * AgentKit integration
 * Web dashboard for debugging agent actions

@@ -5,6 +5,9 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: write   # <--- REQUIRED for semantic-release
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -17,11 +20,10 @@ jobs:
         with:
           node-version: 22
 
-      # npm install is stable; npm ci is currently broken with npm 10 + Node 22
-      - name: Install dependencies safely
-        run: npm install --omit=dev=false
+      - name: Install dependencies
+        run: npm install
 
       - name: Release
-        run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release

@@ -7,6 +7,7 @@ import {
 import { handleNasRecycleBin, handleNasFreeSpace } from "./nasHandler.js";
 import { handleQbUnregistered } from "./qbittorrentHandler.js";
 import { handleAddMedia } from "./addMediaHandler.js";
+import { handleShowTop } from "./topHandler.js";
 
 export async function routeIntent(bot, chatId, intentResult, statusId) {
   const { intent, entities,reference } = intentResult;
@@ -43,6 +44,15 @@ export async function routeIntent(bot, chatId, intentResult, statusId) {
 
     case "qb_delete_unregistered_movies":
       return handleQbUnregistered(bot, chatId, "movies");
+
+    case "show_largest_tv":
+      return handleShowTop(bot, chatId, { scope: "tv", metric: "size", reference });
+    case "show_largest_movies":
+      return handleShowTop(bot, chatId, { scope: "movie", metric: "size", reference });
+    case "show_top_rated_tv":
+      return handleShowTop(bot, chatId, { scope: "tv", metric: "rating", reference });
+    case "show_top_rated_movies":
+      return handleShowTop(bot, chatId, { scope: "movie", metric: "rating", reference });
 
     case "list_fully_watched_tv":
       return handleListFullyWatched(bot, chatId);

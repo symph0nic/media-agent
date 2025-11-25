@@ -220,6 +220,8 @@ how much disk space
 delete unregistered torrents
 add severance
 add the creator movie
+show me the 10 largest shows
+top rated movies
 
 ```
 

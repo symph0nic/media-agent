@@ -31,6 +31,10 @@ INTENT OPTIONS:
 - "qb_delete_unregistered"
 - "qb_delete_unregistered_tv"
 - "qb_delete_unregistered_movies"
+- "show_largest_tv"
+- "show_largest_movies"
+- "show_top_rated_tv"
+- "show_top_rated_movies"
 - "help"
 - "unknown"
 
@@ -167,6 +171,22 @@ Return:
   "intent": "add_movie",
   "entities": { "title":"the creator", "seasonNumber":0, "episodeNumber":0 },
   "reference": "add the creator movie"
+}
+
+User: "show me the 10 largest shows"
+Return:
+{
+  "intent": "show_largest_tv",
+  "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "show me the 10 largest shows"
+}
+
+User: "top rated movies"
+Return:
+{
+  "intent": "show_top_rated_movies",
+  "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "top rated movies"
 }
 
 If unsure:

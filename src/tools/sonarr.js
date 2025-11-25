@@ -116,3 +116,8 @@ export async function addSeries(series, { rootFolderPath, qualityProfileId }) {
   const { data } = await client.post("/api/v3/series", payload);
   return data;
 }
+
+export async function listAllSeries() {
+  const { data } = await client.get("/api/v3/series");
+  return data || [];
+}

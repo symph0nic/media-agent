@@ -39,3 +39,8 @@ export async function addMovie(movie, { rootFolderPath, qualityProfileId }) {
   const { data } = await client.post("/api/v3/movie", payload);
   return data;
 }
+
+export async function listAllMovies() {
+  const { data } = await client.get("/api/v3/movie");
+  return data || [];
+}

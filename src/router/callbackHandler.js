@@ -23,6 +23,7 @@ import { formatBytes } from "../tools/format.js";
 import { handleQbUnregisteredConfirm } from "./qbittorrentHandler.js";
 import { findSeriesInCache } from "../cache/sonarrCache.js";
 import { handleAddMediaCallback } from "./addMediaHandler.js";
+import { logError } from "../logger.js";
 
 function formatGb(bytes) {
   if (!bytes || bytes <= 0) return "0Gb";

@@ -1,3 +1,9 @@
+## [1.0.3](https://github.com/symph0nic/media-agent/compare/v1.0.2...v1.0.3) (2025-11-25)
+
+### Bug Fixes
+
+* Added auto version increment and notification on startup ([bd7e984](https://github.com/symph0nic/media-agent/commit/bd7e984da149c2597d0680adb7b907efc644b25a))
+
 ## [1.0.2](https://github.com/symph0nic/media-agent/compare/v1.0.1...v1.0.2) (2025-11-25)
 
 ### Bug Fixes

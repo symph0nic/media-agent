@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/symph0nic/media-agent/compare/v1.0.3...v1.1.0) (2025-11-25)
+
+### Features
+
+* Logging added ([148816d](https://github.com/symph0nic/media-agent/commit/148816dda23be7bfd2194aa9faa2dda67679f9fa))
+
 ## [1.0.3](https://github.com/symph0nic/media-agent/compare/v1.0.2...v1.0.3) (2025-11-25)
 
 ### Bug Fixes

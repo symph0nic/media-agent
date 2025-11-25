@@ -19,6 +19,12 @@ export function loadConfig() {
     MODEL: process.env.OPENAI_MODEL,
     SONARR_URL: process.env.SONARR_URL,
     SONARR_API_KEY: process.env.SONARR_API_KEY,
+    SONARR_DEFAULT_ROOT: process.env.SONARR_DEFAULT_ROOT,
+    SONARR_DEFAULT_PROFILE: process.env.SONARR_DEFAULT_PROFILE,
+    RADARR_URL: process.env.RADARR_URL,
+    RADARR_API_KEY: process.env.RADARR_API_KEY,
+    RADARR_DEFAULT_ROOT: process.env.RADARR_DEFAULT_ROOT,
+    RADARR_DEFAULT_PROFILE: process.env.RADARR_DEFAULT_PROFILE,
 
     // Plex
     PLEX_URL: process.env.PLEX_URL,

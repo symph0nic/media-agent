@@ -6,6 +6,7 @@ import {
 } from "./tvHandler.js";
 import { handleNasRecycleBin, handleNasFreeSpace } from "./nasHandler.js";
 import { handleQbUnregistered } from "./qbittorrentHandler.js";
+import { handleAddMedia } from "./addMediaHandler.js";
 
 export async function routeIntent(bot, chatId, intentResult, statusId) {
   const { intent, entities,reference } = intentResult;
@@ -13,17 +14,12 @@ export async function routeIntent(bot, chatId, intentResult, statusId) {
   entities.reference = reference;
 
   switch (intent) {
+    case "add_media":
     case "add_movie":
-      return bot.sendMessage(
-        chatId,
-        `Add movie: ${entities.title} (${entities.year ?? "year unknown"})`
-      );
-
     case "add_tv":
-      return bot.sendMessage(
-        chatId,
-        `Add TV show: ${entities.title}`
-      );
+      entities.type =
+        intent === "add_movie" ? "movie" : intent === "add_tv" ? "tv" : entities.type || "auto";
+      return handleAddMedia(bot, chatId, entities);
 
     case "tidy_tv":
       return handleTidySeason(bot, chatId, entities, statusId);

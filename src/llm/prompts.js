@@ -8,7 +8,8 @@ Your job is to analyze the user's message and output a JSON object:
   "entities": {
     "title": string,
     "seasonNumber": number,
-    "episodeNumber": number
+    "episodeNumber": number,
+    "type"?: "tv"|"movie"|"auto"
   },
   "reference": string
 }
@@ -24,6 +25,7 @@ INTENT OPTIONS:
 - "list_fully_watched_tv"
 - "add_tv"
 - "add_movie"
+- "add_media"
 - "nas_empty_recycle_bin"
 - "nas_check_free_space"
 - "qb_delete_unregistered"
@@ -51,6 +53,11 @@ ENTITY RULES:
 
 "episodeNumber":
   - Number if explicitly stated. Otherwise 0.
+
+"type":
+  - Use "tv" if the user explicitly says TV/series/show.
+  - Use "movie" if the user says movie/film.
+  - Otherwise "auto".
 
 -------------------------
 REFERENCE FIELD:
@@ -144,6 +151,22 @@ Return:
   "intent": "redownload_tv",
   "entities":{ "title":"", "seasonNumber":0, "episodeNumber":0 },
   "reference": "the one from last night"
+}
+
+User: "add severance"
+Return:
+{
+  "intent": "add_media",
+  "entities": { "title":"severance", "seasonNumber":0, "episodeNumber":0, "type": "auto" },
+  "reference": "add severance"
+}
+
+User: "add the creator movie"
+Return:
+{
+  "intent": "add_movie",
+  "entities": { "title":"the creator", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "add the creator movie"
 }
 
 If unsure:

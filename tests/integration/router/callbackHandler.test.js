@@ -8,6 +8,8 @@ const mockFindEpisode = jest.fn();
 const mockGetSeriesById = jest.fn();
 const mockUpdateSeries = jest.fn();
 const mockEmptyRecycleBin = jest.fn();
+const mockAddSeries = jest.fn();
+const mockAddMovie = jest.fn();
 
 jest.unstable_mockModule("../../../src/tools/sonarr.js", () => ({
   deleteEpisodeFile: mockDeleteEpisodeFile,
@@ -15,11 +17,22 @@ jest.unstable_mockModule("../../../src/tools/sonarr.js", () => ({
   getEpisodes: mockGetEpisodes,
   findEpisode: mockFindEpisode,
   getSeriesById: mockGetSeriesById,
-  updateSeries: mockUpdateSeries
+  updateSeries: mockUpdateSeries,
+  addSeries: mockAddSeries,
+  getSonarrRootFolders: jest.fn().mockResolvedValue([{ path: "/tv" }]),
+  getSonarrQualityProfiles: jest.fn().mockResolvedValue([{ id: 1 }]),
+  lookupSeries: jest.fn().mockResolvedValue([])
 }));
 
 jest.unstable_mockModule("../../../src/tools/nas.js", () => ({
   emptyRecycleBin: mockEmptyRecycleBin
+}));
+
+jest.unstable_mockModule("../../../src/tools/radarr.js", () => ({
+  addMovie: mockAddMovie,
+  lookupMovie: jest.fn().mockResolvedValue([]),
+  getRadarrRootFolders: jest.fn().mockResolvedValue([{ path: "/movies" }]),
+  getRadarrQualityProfiles: jest.fn().mockResolvedValue([{ id: 2 }])
 }));
 
 const mockSafeEditMessage = jest.fn();
@@ -56,6 +69,8 @@ describe("callbackHandler redownload actions", () => {
     mockDeleteEpisodeFile.mockReset();
     mockRunEpisodeSearch.mockReset();
     mockFindSeriesInCache.mockReset();
+    mockAddSeries.mockReset();
+    mockAddMovie.mockReset();
   });
 
   test("redl_yes deletes file and starts episode search", async () => {

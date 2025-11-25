@@ -7,6 +7,7 @@ const mockHandleTidySeason = jest.fn();
 const mockHandleNasRecycleBin = jest.fn();
 const mockHandleNasFreeSpace = jest.fn();
 const mockHandleQbUnregistered = jest.fn();
+const mockHandleAddMedia = jest.fn();
 
 jest.unstable_mockModule("../../../src/router/tvHandler.js", () => ({
   handleRedownload: mockHandleRedownload,
@@ -21,6 +22,10 @@ jest.unstable_mockModule("../../../src/router/nasHandler.js", () => ({
 
 jest.unstable_mockModule("../../../src/router/qbittorrentHandler.js", () => ({
   handleQbUnregistered: mockHandleQbUnregistered
+}));
+
+jest.unstable_mockModule("../../../src/router/addMediaHandler.js", () => ({
+  handleAddMedia: mockHandleAddMedia
 }));
 
 const { routeIntent } = await import("../../../src/router/intentRouter.js");
@@ -66,14 +71,40 @@ describe("routeIntent", () => {
     expect(bot.sendMessage).toHaveBeenCalledWith(1, "Sorry, I didn’t understand that.");
   });
 
-  test("supporting intents like add_movie send confirmation placeholders", async () => {
+  test("routes add_movie/add_tv/add_media to handler with type hint", async () => {
     const bot = createMockBot();
     await routeIntent(
       bot,
       7,
       { intent: "add_movie", entities: { title: "Movie", year: 2020 }, reference: "Movie" }
     );
-    expect(bot.sendMessage).toHaveBeenCalledWith(7, "Add movie: Movie (2020)");
+    expect(mockHandleAddMedia).toHaveBeenCalledWith(
+      bot,
+      7,
+      expect.objectContaining({ type: "movie", reference: "Movie" })
+    );
+
+    await routeIntent(
+      bot,
+      8,
+      { intent: "add_tv", entities: { title: "Show" }, reference: "Show" }
+    );
+    expect(mockHandleAddMedia).toHaveBeenCalledWith(
+      bot,
+      8,
+      expect.objectContaining({ type: "tv", reference: "Show" })
+    );
+
+    await routeIntent(
+      bot,
+      9,
+      { intent: "add_media", entities: { title: "Either" }, reference: "Either" }
+    );
+    expect(mockHandleAddMedia).toHaveBeenCalledWith(
+      bot,
+      9,
+      expect.objectContaining({ reference: "Either" })
+    );
   });
 
   test("routes NAS recycle-bin intent", async () => {

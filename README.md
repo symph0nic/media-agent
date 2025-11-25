@@ -75,6 +75,9 @@ Ask “free up disk space” (or similar) and the bot will connect to your NAS o
 ### 🧹 qBittorrent cleanup
 Ask “delete unregistered torrents” and the bot will query qBittorrent for torrents whose trackers report “unregistered”, then prompt you to confirm deleting them (and their files). This can be scoped to movies or tv shows (based on qBittorrent categories) by asking "delete unregistered tv/movie torrents".
 
+### ➕ Add shows or movies
+Ask “add severance” or “add the creator movie” and the bot will search Sonarr/Radarr, show a poster + overview, let you page through matches, and add the selected item using your default root folder and quality profile. Cards disappear when finished.
+
 ---
 
 ## 🚧 Features (Planned)
@@ -139,6 +142,12 @@ SONARR_API_KEY=your-sonarr-api-key
 RADARR_URL=[http://your-radarr-host:7878](http://your-radarr-host:7878)
 RADARR_API_KEY=your-radarr-api-key
 
+# Optional defaults for add-media
+SONARR_DEFAULT_ROOT=/tv
+SONARR_DEFAULT_PROFILE=HD-1080p
+RADARR_DEFAULT_ROOT=/movies
+RADARR_DEFAULT_PROFILE=Any
+
 NAS_SHARE_ROOTS=/share/CACHEDEV1_DATA,/share/CACHEDEV2_DATA
 # optional legacy fallback:
 # NAS_RECYCLE_PATH=/share/CACHEDEV1_DATA/@Recycle
@@ -155,6 +164,8 @@ QBITTORRENT_USERNAME=admin
 QBITTORRENT_PASSWORD=secret
 QBITTORRENT_TV_CATEGORY=tv-sonarr
 QBITTORRENT_MOVIE_CATEGORY=radarr
+
+# Sonarr/Radarr add-media uses the first available root folder and quality profile returned by each service.
 
 ```
 

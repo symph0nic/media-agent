@@ -21,6 +21,7 @@ import { loadConfig } from "../config.js";
 import { formatBytes } from "../tools/format.js";
 import { handleQbUnregisteredConfirm } from "./qbittorrentHandler.js";
 import { findSeriesInCache } from "../cache/sonarrCache.js";
+import { handleAddMediaCallback } from "./addMediaHandler.js";
 
 function formatGb(bytes) {
   if (!bytes || bytes <= 0) return "0Gb";
@@ -67,6 +68,11 @@ export async function handleCallback(bot, query) {
   if (!state) {
     await bot.answerCallbackQuery(query.id, { text: "No active request." });
     return;
+  }
+
+  // Media add flow shortcuts
+  if (data.startsWith("addmedia_")) {
+    return handleAddMediaCallback(bot, query);
   }
 
   const [action, param] = data.split("|");

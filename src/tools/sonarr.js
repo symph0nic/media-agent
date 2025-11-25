@@ -13,15 +13,7 @@ export async function lookupSeries(term) {
   const { data } = await client.get(`/api/v3/series/lookup`, {
     params: { term }
   });
-
-  // Only keep shows already added to Sonarr (have id)
-  return data
-    .filter((s) => s.id)
-    .map((s) => ({
-      id: s.id,
-      title: s.title,
-      tvdbId: s.tvdbId
-    }));
+  return data || [];
 }
 
 export async function getEpisodes(seriesId) {
@@ -97,3 +89,30 @@ export async function updateSeries(seriesId, seriesPayload) {
   return await client.put(`/api/v3/series/${seriesId}`, seriesPayload);
 }
 
+export async function getSonarrRootFolders() {
+  const { data } = await client.get("/api/v3/rootfolder");
+  return data || [];
+}
+
+export async function getSonarrQualityProfiles() {
+  const { data } = await client.get("/api/v3/qualityprofile");
+  return data || [];
+}
+
+export async function addSeries(series, { rootFolderPath, qualityProfileId }) {
+  const payload = {
+    title: series.title,
+    tvdbId: series.tvdbId,
+    qualityProfileId,
+    rootFolderPath,
+    seasons: (series.seasons || []).map((s) => ({ seasonNumber: s.seasonNumber, monitored: true })),
+    monitored: true,
+    titleSlug: series.titleSlug,
+    addOptions: { searchForMissingEpisodes: true },
+    seasonFolder: true,
+    seriesType: series.seriesType || "standard"
+  };
+
+  const { data } = await client.post("/api/v3/series", payload);
+  return data;
+}

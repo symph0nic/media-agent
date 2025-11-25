@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/symph0nic/media-agent/compare/v1.2.0...v1.3.0) (2025-11-25)
+
+### Features
+
+* added 'optimize movies' feature ([155a41c](https://github.com/symph0nic/media-agent/commit/155a41ca4b419918504e54dac2b5c3b4ee0f1540))
+
 ## [1.2.0](https://github.com/symph0nic/media-agent/compare/v1.1.0...v1.2.0) (2025-11-25)
 
 ### Features

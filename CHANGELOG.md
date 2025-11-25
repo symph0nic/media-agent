@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/symph0nic/media-agent/compare/v1.0.0...v1.0.1) (2025-11-25)
+
+### Bug Fixes
+
+* final release config ([a9ae26e](https://github.com/symph0nic/media-agent/commit/a9ae26ee9c028f9348f61a515d07e313c3581678))
+
 ## [1.0.0](https://github.com/symph0nic/media-agent/compare/v0.4.0...v1.0.0) (2025-11-25)
 
 ### ⚠ BREAKING CHANGES

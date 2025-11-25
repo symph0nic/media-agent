@@ -17,10 +17,9 @@ jobs:
         with:
           node-version: 22
 
-      - name: Downgrade npm (fix npm ci lockfile bug)
-        run: npm install -g npm@9
-
-      - run: npm ci
+      # npm install is stable; npm ci is currently broken with npm 10 + Node 22
+      - name: Install dependencies safely
+        run: npm install --omit=dev=false
 
       - name: Release
         run: npx semantic-release

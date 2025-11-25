@@ -1,3 +1,9 @@
+## [1.2.0](https://github.com/symph0nic/media-agent/compare/v1.1.0...v1.2.0) (2025-11-25)
+
+### Features
+
+* Added 'show me the biggest and show me the best feature. ([948bf74](https://github.com/symph0nic/media-agent/commit/948bf74041c1ce04b266bed4bf11392291e0a82d))
+
 ## [1.1.0](https://github.com/symph0nic/media-agent/compare/v1.0.3...v1.1.0) (2025-11-25)
 
 ### Features

@@ -8,6 +8,7 @@ import { handleNasRecycleBin, handleNasFreeSpace } from "./nasHandler.js";
 import { handleQbUnregistered } from "./qbittorrentHandler.js";
 import { handleAddMedia } from "./addMediaHandler.js";
 import { handleShowTop } from "./topHandler.js";
+import { handleOptimizeMovies } from "./optimizeHandler.js";
 
 export async function routeIntent(bot, chatId, intentResult, statusId) {
   const { intent, entities,reference } = intentResult;
@@ -53,6 +54,9 @@ export async function routeIntent(bot, chatId, intentResult, statusId) {
       return handleShowTop(bot, chatId, { scope: "tv", metric: "rating", reference });
     case "show_top_rated_movies":
       return handleShowTop(bot, chatId, { scope: "movie", metric: "rating", reference });
+
+    case "optimize_movies":
+      return handleOptimizeMovies(bot, chatId, entities, {});
 
     case "list_fully_watched_tv":
       return handleListFullyWatched(bot, chatId);

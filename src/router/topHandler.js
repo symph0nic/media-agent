@@ -78,18 +78,20 @@ function formatList(kind, metric, items) {
   items.forEach((item, idx) => {
     const year = item.year || item.releaseYear || item.firstAired?.slice(0, 4) || "";
     const name = item.title || item.name || "(unknown)";
-    if (metric === "size") {
-      const size = formatBytes(
-        kind === "tv" ? item.statistics?.sizeOnDisk ?? 0 : item.sizeOnDisk ?? 0
-      );
-      const count =
-        kind === "tv"
-          ? `${item.statistics?.episodeFileCount ?? 0} files`
-          : `${item.movieFile?.size ?? item.sizeOnDisk ? "downloaded" : "not downloaded"}`;
-      lines.push(`${idx + 1}. ${name}${year ? ` (${year})` : ""} — ${size} — ${count}`);
+    const size = formatBytes(
+      kind === "tv" ? item.statistics?.sizeOnDisk ?? 0 : item.sizeOnDisk ?? 0
+    );
+    if (kind === "tv") {
+      const files = item.statistics?.episodeFileCount ?? 0;
+      lines.push(`${idx + 1}. ${name}${year ? ` (${year})` : ""} — ${size} — ${files} files`);
     } else {
-      const rating = extractRating(item);
-      lines.push(`${idx + 1}. ${name}${year ? ` (${year})` : ""} — ${rating.toFixed(1)}/10`);
+      const quality =
+        item.movieFile?.quality?.quality?.name || item.movieFile?.quality?.quality?.name || "";
+      lines.push(
+        `${idx + 1}. ${name}${year ? ` (${year})` : ""} — ${size}${
+          quality ? ` — ${quality}` : ""
+        }`
+      );
     }
   });
 

@@ -23,6 +23,7 @@ import { formatBytes } from "../tools/format.js";
 import { handleQbUnregisteredConfirm } from "./qbittorrentHandler.js";
 import { findSeriesInCache } from "../cache/sonarrCache.js";
 import { handleAddMediaCallback } from "./addMediaHandler.js";
+import { handleOptimizeCallback } from "./optimizeHandler.js";
 import { logError } from "../logger.js";
 
 function formatGb(bytes) {
@@ -77,6 +78,10 @@ export async function handleCallback(bot, query) {
     return handleAddMediaCallback(bot, query);
   }
 
+  // Movie optimization flow
+  if (data.startsWith("optm_")) {
+    return handleOptimizeCallback(bot, query);
+  }
   const [action, param] = data.split("|");
 
   //

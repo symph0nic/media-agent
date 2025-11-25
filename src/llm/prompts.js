@@ -35,6 +35,7 @@ INTENT OPTIONS:
 - "show_largest_movies"
 - "show_top_rated_tv"
 - "show_top_rated_movies"
+- "optimize_movies"
 - "help"
 - "unknown"
 
@@ -187,6 +188,14 @@ Return:
   "intent": "show_top_rated_movies",
   "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
   "reference": "top rated movies"
+}
+
+User: "optimize the largest movies"
+Return:
+{
+  "intent": "optimize_movies",
+  "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "optimize the largest movies"
 }
 
 If unsure:

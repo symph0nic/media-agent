@@ -44,3 +44,18 @@ export async function listAllMovies() {
   const { data } = await client.get("/api/v3/movie");
   return data || [];
 }
+
+export async function editMoviesQualityProfile(movieIds, qualityProfileId) {
+  const body = {
+    movieIds,
+    qualityProfileId
+  };
+  const { data } = await client.put("/api/v3/movie/editor", body);
+  return data;
+}
+
+export async function searchMovies(movieIds = []) {
+  const body = { name: "MoviesSearch", movieIds };
+  const { data } = await client.post("/api/v3/command", body);
+  return data;
+}

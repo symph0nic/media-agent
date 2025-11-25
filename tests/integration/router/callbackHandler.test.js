@@ -10,6 +10,8 @@ const mockUpdateSeries = jest.fn();
 const mockEmptyRecycleBin = jest.fn();
 const mockAddSeries = jest.fn();
 const mockAddMovie = jest.fn();
+const mockEditMoviesQualityProfile = jest.fn();
+const mockSearchMovies = jest.fn();
 
 jest.unstable_mockModule("../../../src/tools/sonarr.js", () => ({
   deleteEpisodeFile: mockDeleteEpisodeFile,
@@ -32,7 +34,10 @@ jest.unstable_mockModule("../../../src/tools/radarr.js", () => ({
   addMovie: mockAddMovie,
   lookupMovie: jest.fn().mockResolvedValue([]),
   getRadarrRootFolders: jest.fn().mockResolvedValue([{ path: "/movies" }]),
-  getRadarrQualityProfiles: jest.fn().mockResolvedValue([{ id: 2 }])
+  getRadarrQualityProfiles: jest.fn().mockResolvedValue([{ id: 2 }]),
+  editMoviesQualityProfile: mockEditMoviesQualityProfile,
+  searchMovies: mockSearchMovies,
+  listAllMovies: jest.fn().mockResolvedValue([])
 }));
 
 const mockSafeEditMessage = jest.fn();

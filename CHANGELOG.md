@@ -1,3 +1,9 @@
+## [1.0.2](https://github.com/symph0nic/media-agent/compare/v1.0.1...v1.0.2) (2025-11-25)
+
+### Bug Fixes
+
+* workflow update ([f94f884](https://github.com/symph0nic/media-agent/commit/f94f88436dc27e2e4f3a09bc9ed1d358349a8963))
+
 ## [1.0.1](https://github.com/symph0nic/media-agent/compare/v1.0.0...v1.0.1) (2025-11-25)
 
 ### Bug Fixes

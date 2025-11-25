@@ -3,11 +3,9 @@
   "repositoryUrl": "https://github.com/symph0nic/media-agent.git",
   "preset": "conventionalcommits",
   "tagFormat": "v${version}",
-
   "release": {
     "initialVersion": "1.0.0"
   },
-
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
@@ -19,6 +17,14 @@
         "message": "chore(release): ${nextRelease.version}"
       }
     ],
-    "@semantic-release/github"
+    [
+      "@semantic-release/github",
+      {
+        "assets": [],
+        "successComment": false,
+        "failComment": false,
+        "releasedLabels": false
+      }
+    ]
   ]
 }

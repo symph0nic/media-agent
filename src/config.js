@@ -39,6 +39,8 @@ export function loadConfig() {
     NAS_SSH_USERNAME: process.env.NAS_SSH_USERNAME,
     NAS_SSH_PASSWORD: process.env.NAS_SSH_PASSWORD,
     NAS_SSH_PRIVATE_KEY: process.env.NAS_SSH_PRIVATE_KEY,
+    NAS_BIN_MIN_BYTES: Number(process.env.NAS_BIN_MIN_BYTES || 1_000_000),
+    NAS_BIN_MIN_FILES: Number(process.env.NAS_BIN_MIN_FILES || 10),
 
     QBITTORRENT_URL: process.env.QBITTORRENT_URL,
     QBITTORRENT_USERNAME: process.env.QBITTORRENT_USERNAME,

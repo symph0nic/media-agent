@@ -24,6 +24,8 @@ function formatBinPreview(binSummary) {
 export async function handleNasRecycleBin(bot, chatId) {
   const config = loadConfig();
   const shareRoots = config.NAS_SHARE_ROOTS || [];
+  const minBytes = Number(config.NAS_BIN_MIN_BYTES || 0);
+  const minFiles = Number(config.NAS_BIN_MIN_FILES || 0);
 
   if (shareRoots.length === 0) {
     await bot.sendMessage(
@@ -101,14 +103,28 @@ export async function handleNasRecycleBin(bot, chatId) {
       return;
     }
 
+    const autoSkipped = binSummaries.filter(
+      (b) => b.summary.totalBytes < minBytes && b.summary.totalFiles < minFiles
+    );
+    const keptBins = binSummaries.filter(
+      (b) => !(b.summary.totalBytes < minBytes && b.summary.totalFiles < minFiles)
+    );
+
+    const listToShow = keptBins.length > 0 ? keptBins : binSummaries;
+
     const lines = [];
     lines.push("🗑 *NAS Recycle Bins*");
     lines.push(`Detected bins: ${binSummaries.length}`);
+    if (autoSkipped.length) {
+      lines.push(
+        `Auto-skipped ${autoSkipped.length} tiny bins (<${formatBytes(minBytes)} & <${minFiles} files).`
+      );
+    }
     lines.push(`Total files: ${totalFiles}`);
     lines.push(`Approximate size: *${formatBytes(totalBytes)}*`);
     lines.push("");
 
-    binSummaries.forEach((bin, idx) => {
+    listToShow.forEach((bin, idx) => {
       lines.push(`${idx + 1}. *${bin.share}*`);
       lines.push(`   Path: \`${bin.recyclePath}\``);
       lines.push(
@@ -129,13 +145,16 @@ export async function handleNasRecycleBin(bot, chatId) {
     console.log("[nas] Sending summary message to chat", chatId);
     const summaryMsg = await bot.sendMessage(chatId, lines.join("\n"), {
       parse_mode: "Markdown",
-      ...nasPrimaryKeyboard()
+      ...nasPrimaryKeyboard(autoSkipped.length > 0)
     });
 
     pending[chatId] = {
       mode: "nas_empty",
       bins: binSummaries,
-      summaryMessageId: summaryMsg.message_id
+      filteredBins: listToShow,
+      autoSkipped,
+      summaryMessageId: summaryMsg.message_id,
+      hasSkipped: autoSkipped.length > 0
     };
   } catch (err) {
     console.error("[nas] Failed to inspect recycle bins:", err);

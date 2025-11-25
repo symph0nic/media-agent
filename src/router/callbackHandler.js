@@ -13,7 +13,8 @@ import {
   seriesSelectionKeyboard,
   yesNoPickTidyKeyboard,
   seriesSelectionTidyKeyboard,
-  nasSelectionKeyboard
+  nasSelectionKeyboard,
+  nasPrimaryKeyboard
 } from "../telegram/reply.js";
 import { safeEditMessage } from "../telegram/safeEdit.js";
 import { buildTidyConfirmation, handleRedownload } from "../router/tvHandler.js";
@@ -715,15 +716,21 @@ if (action === "nas_clear_all") {
 // 🔹 NAS RECYCLE BIN — PICK SHARE
 //
 if (action === "nas_clear_pick") {
-  if (!state || state.mode !== "nas_empty" || !state.bins?.length) {
+  if (!state || state.mode !== "nas_empty") {
     await bot.answerCallbackQuery(query.id, { text: "No recycle-bin request pending." });
     return;
   }
 
   await deleteSelectionMessage(bot, chatId, state);
 
+  const pickList = state.filteredBins?.length ? state.filteredBins : state.bins || [];
+  if (!pickList.length) {
+    await bot.answerCallbackQuery(query.id, { text: "No recycle-bin request pending." });
+    return;
+  }
+
   const pickMsg = await bot.sendMessage(chatId, "Select which recycle bin to empty:", {
-    ...nasSelectionKeyboard(state.bins)
+    ...nasSelectionKeyboard(pickList, state.hasSkipped)
   });
   state.selectionMessageId = pickMsg.message_id;
   await bot.answerCallbackQuery(query.id);
@@ -734,13 +741,14 @@ if (action === "nas_clear_pick") {
 // 🔹 NAS RECYCLE BIN — CLEAR SPECIFIC SHARE
 //
 if (action === "nas_clear_select") {
-  if (!state || state.mode !== "nas_empty" || !state.bins?.length) {
+  if (!state || state.mode !== "nas_empty") {
     await bot.answerCallbackQuery(query.id, { text: "No recycle-bin request pending." });
     return;
   }
 
   const binIndex = Number(param);
-  const bin = state.bins[binIndex];
+  const pickList = state.filteredBins?.length ? state.filteredBins : state.bins || [];
+  const bin = pickList[binIndex];
 
   if (!bin) {
     await bot.answerCallbackQuery(query.id, { text: "Invalid recycle bin." });
@@ -797,6 +805,58 @@ if (action === "nas_clear_cancel") {
   delete pending[chatId];
   await safeEditMessage(bot, chatId, query.message.message_id, "❌ Recycle-bin cleanup cancelled.");
   await deleteSelectionMessage(bot, chatId, state);
+  await bot.answerCallbackQuery(query.id);
+  return;
+}
+
+//
+// 🔹 NAS RECYCLE BIN — SHOW ALL (include skipped tiny bins)
+//
+if (action === "nas_show_all") {
+  const st = pending[chatId];
+  if (!st || st.mode !== "nas_empty") {
+    await bot.answerCallbackQuery(query.id, { text: "No recycle-bin request pending." });
+    return;
+  }
+
+  const bins = st.bins || [];
+  const lines = [];
+  lines.push("🗑 *NAS Recycle Bins (all)*");
+  lines.push(`Detected bins: ${bins.length}`);
+  const totalBytes = bins.reduce((sum, b) => sum + (b.summary?.totalBytes || 0), 0);
+  const totalFiles = bins.reduce((sum, b) => sum + (b.summary?.totalFiles || 0), 0);
+  lines.push(`Total files: ${totalFiles}`);
+  lines.push(`Approximate size: *${formatBytes(totalBytes)}*`);
+  lines.push("");
+
+  bins.forEach((bin, idx) => {
+    lines.push(`${idx + 1}. *${bin.share}*`);
+    lines.push(`   Path: \`${bin.recyclePath}\``);
+    lines.push(`   Entries: ${bin.summary.entryCount} (${bin.summary.totalFiles} files)`);
+    lines.push(`   Size: *${formatBytes(bin.summary.totalBytes)}*`);
+    const preview = (bin.summary.preview || [])
+      .slice(0, 3)
+      .map((entry) => `${entry.name} (${formatBytes(entry.sizeBytes)})`);
+    if (preview.length) {
+      lines.push(`   Examples: ${preview.join(", ")}`);
+    }
+    lines.push("");
+  });
+
+  lines.push("Clear everything, pick a specific bin, or cancel. Deletions cannot be undone.");
+
+  await safeEditMessage(bot, chatId, query.message.message_id, lines.join("\n"), {
+    parse_mode: "Markdown",
+    ...nasPrimaryKeyboard(false)
+  });
+
+  pending[chatId] = {
+    ...st,
+    filteredBins: bins,
+    autoSkipped: [],
+    summaryMessageId: query.message.message_id
+  };
+
   await bot.answerCallbackQuery(query.id);
   return;
 }

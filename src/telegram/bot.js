@@ -21,12 +21,25 @@ export async function startTelegramBot(config) {
   // After bot starts polling
   bot.on("polling_error", console.error);
 
-  // Send startup message
-  bot.sendMessage(
-    config.ADMIN_CHAT_ID,
-    `🤖 *Media Agent is online*\nHost: ${os.hostname()}\nTime: ${new Date().toLocaleString()}`,
-    { parse_mode: "Markdown" }
-  );
+  // Send startup message with quick examples
+  const examples = [
+    "add severance",
+    "redo latest bake off",
+    "tidy up the block s6",
+    "free up disk space",
+    "how much free disk space?",
+    "delete unregistered torrents"
+  ];
+
+  const startup = [
+    "🤖 *Media Agent is online*",
+    `Time: ${new Date().toLocaleString()}`,
+    "",
+    "*Try:*",
+    ...examples.map((e) => `• ${e}`)
+  ].join("\n");
+
+  bot.sendMessage(config.ADMIN_CHAT_ID, startup, { parse_mode: "Markdown" });
 
 
   //

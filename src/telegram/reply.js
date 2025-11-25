@@ -79,19 +79,30 @@ export function seriesSelectionKeyboard(seriesList) {
   };
 }
 
-export function nasPrimaryKeyboard() {
+export function nasPrimaryKeyboard(hasSkipped = false) {
+  const extra = hasSkipped
+    ? [[{ text: "🔎 Show all bins", callback_data: "nas_show_all" }]]
+    : [];
   return {
     reply_markup: {
       inline_keyboard: [
-        [{ text: "✅ Clear all bins", callback_data: "nas_clear_all" }],
+        [
+          {
+            text: hasSkipped
+              ? "✅ Clear all bins (incl. tiny)"
+              : "✅ Clear all bins",
+            callback_data: "nas_clear_all"
+          }
+        ],
         [{ text: "📂 Pick a bin", callback_data: "nas_clear_pick" }],
+        ...extra,
         [{ text: "❌ Cancel", callback_data: "nas_clear_cancel" }]
       ]
     }
   };
 }
 
-export function nasSelectionKeyboard(bins) {
+export function nasSelectionKeyboard(bins, hasSkipped = false) {
   return {
     reply_markup: {
       inline_keyboard: [
@@ -101,6 +112,9 @@ export function nasSelectionKeyboard(bins) {
             callback_data: `nas_clear_select|${index}`
           }
         ]),
+        ...(hasSkipped
+          ? [[{ text: "🔎 Show all bins", callback_data: "nas_show_all" }]]
+          : []),
         [{ text: "⬅️ Back", callback_data: "nas_clear_pick_cancel" }]
       ]
     }

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { CLASSIFIER_SYSTEM_PROMPT, CW_RESOLVE_PROMPT } from "./prompts.js";
+import { CLASSIFIER_SYSTEM_PROMPT, CW_RESOLVE_PROMPT, TIDY_RESOLVE_PROMPT } from "./prompts.js";
 
 export async function classifyMessage(config, userText) {
   const client = new OpenAI({ apiKey: config.OPENAI_API_KEY });
@@ -61,3 +61,28 @@ export async function resolveCWAmbiguous(config, reference, cwOptions) {
   }
 }
 
+export async function resolveTidyAmbiguous(config, reference, seasonOptions) {
+  const client = new OpenAI({ apiKey: config.OPENAI_API_KEY });
+
+  const filledPrompt = TIDY_RESOLVE_PROMPT
+    .replace("{{REFERENCE}}", reference)
+    .replace("{{OPTIONS}}", JSON.stringify(seasonOptions, null, 2));
+
+  const response = await client.responses.create({
+    model: config.MODEL,
+    input: filledPrompt,
+    text: {
+      format: { type: "json_object" }
+    }
+  });
+
+  const raw = response.output_text;
+  console.log("RESOLVE TIDY RAW:", raw);
+
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("[resolveTidyAmbiguous] ERROR parsing:", raw);
+    return { best: "none" };
+  }
+}

@@ -227,3 +227,25 @@ or:
 
 No explanations. No extra text.
 `;
+
+export const TIDY_RESOLVE_PROMPT = `
+You are resolving an ambiguous reference to a TV season the user wants to tidy up (delete files and unmonitor).
+
+The user wrote:
+"{{REFERENCE}}"
+
+Here is a list of recently finished seasons:
+{{OPTIONS}}
+
+Your job:
+- Pick EXACTLY ONE of the listed seasons.
+- Select the one the user most likely meant.
+- If none match, reply with: {"best": "none"}
+
+Output ONLY valid JSON in this shape:
+{"best": {"title": "...", "season": X}}
+or:
+{"best": "none"}
+
+No explanations. No extra text.
+`;

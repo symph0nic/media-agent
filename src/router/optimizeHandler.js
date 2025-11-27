@@ -151,6 +151,16 @@ export async function handleOptimizeCallback(bot, query) {
   }
 
   if (data === "optm_cancel") {
+    if (state.selectionMessageId) {
+      try {
+        await bot.deleteMessage(chatId, state.selectionMessageId);
+      } catch (_) {}
+    }
+    if (state.summaryMessageId) {
+      try {
+        await bot.deleteMessage(chatId, state.summaryMessageId);
+      } catch (_) {}
+    }
     delete pending[chatId];
     await bot.answerCallbackQuery(query.id);
     return bot.sendMessage(chatId, "Optimization cancelled.");
@@ -223,6 +233,12 @@ export async function handleOptimizeCallback(bot, query) {
         await bot.deleteMessage(chatId, state.selectionMessageId);
       } catch (_) {}
       delete state.selectionMessageId;
+    }
+    if (state.summaryMessageId) {
+      try {
+        await bot.deleteMessage(chatId, state.summaryMessageId);
+      } catch (_) {}
+      delete state.summaryMessageId;
     }
 
     await bot.answerCallbackQuery(query.id, { text: "Optimizing…" });

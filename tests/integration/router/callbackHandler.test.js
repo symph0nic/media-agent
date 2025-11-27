@@ -145,6 +145,164 @@ describe("callbackHandler redownload actions", () => {
     );
     expect(pending[3]).toBeUndefined();
   });
+
+  test("redl_no cancels pending request", async () => {
+    const bot = createMockBot({
+      answerCallbackQuery: jest.fn().mockResolvedValue()
+    });
+
+    pending[4] = { mode: "redownload" };
+
+    await handleCallback(bot, {
+      id: "cb",
+      data: "redl_no",
+      message: { chat: { id: 4 }, message_id: 14 }
+    });
+
+    expect(mockSafeEditMessage).toHaveBeenCalledWith(bot, 4, 14, "❌ Cancelled.");
+    expect(pending[4]).toBeUndefined();
+  });
+
+  test("redl_pick renders series picker keyboard", async () => {
+    const bot = createMockBot({
+      answerCallbackQuery: jest.fn().mockResolvedValue()
+    });
+
+    pending[5] = {
+      mode: "redownload",
+      seriesList: [{ id: 10, title: "Option" }]
+    };
+
+    await handleCallback(bot, {
+      id: "cb",
+      data: "redl_pick",
+      message: { chat: { id: 5 }, message_id: 15 }
+    });
+
+    expect(mockSafeEditMessage).toHaveBeenCalledWith(
+      bot,
+      5,
+      15,
+      "Select the correct show:",
+      expect.objectContaining({ reply_markup: expect.any(Object) })
+    );
+  });
+
+  test("redl_select refreshes confirmation for chosen series", async () => {
+    const bot = createMockBot({
+      sendChatAction: jest.fn().mockResolvedValue(),
+      answerCallbackQuery: jest.fn().mockResolvedValue()
+    });
+
+    pending[6] = {
+      mode: "redownload",
+      season: 2,
+      episode: 3,
+      seriesList: [
+        { id: 20, title: "First" },
+        { id: 21, title: "Second" }
+      ]
+    };
+
+    const ep = { id: 500, episodeFileId: 600, seasonNumber: 2, episodeNumber: 3 };
+    mockGetEpisodes.mockResolvedValue([ep]);
+    mockFindEpisode.mockReturnValue([ep]);
+
+    await handleCallback(bot, {
+      id: "cb",
+      data: "redl_select|21",
+      message: { chat: { id: 6 }, message_id: 16 }
+    });
+
+    expect(mockGetEpisodes).toHaveBeenCalledWith(21);
+    expect(mockFindEpisode).toHaveBeenCalledWith([ep], 2, 3);
+    expect(pending[6]).toMatchObject({
+      episodeId: 500,
+      episodeFileId: 600
+    });
+    expect(mockSafeEditMessage).toHaveBeenCalledWith(
+      bot,
+      6,
+      16,
+      expect.stringContaining("Found *Second*"),
+      expect.objectContaining({ parse_mode: "Markdown" })
+    );
+  });
+
+  test("redl_pick_resolved prompts for alternatives", async () => {
+    const bot = createMockBot({
+      sendMessage: jest.fn().mockResolvedValue({}),
+      answerCallbackQuery: jest.fn().mockResolvedValue()
+    });
+
+    pending[7] = {
+      mode: "redownload_resolved",
+      alternatives: [
+        { title: "Show A", seasonNumber: 1, episodeNumber: 1, ratingKey: "a" },
+        { title: "Show B", seasonNumber: 2, episodeNumber: 3, ratingKey: "b" }
+      ]
+    };
+
+    await handleCallback(bot, {
+      id: "cb",
+      data: "redl_pick_resolved",
+      message: { chat: { id: 7 }, message_id: 17 }
+    });
+
+    expect(bot.sendMessage).toHaveBeenCalledWith(
+      7,
+      "Which show did you mean?",
+      expect.objectContaining({ reply_markup: expect.any(Object) })
+    );
+  });
+
+  test("redl_pick_specific triggers explicit redownload", async () => {
+    const bot = createMockBot({
+      sendMessage: jest.fn().mockResolvedValue({})
+    });
+    mockHandleRedownload.mockResolvedValue();
+
+    pending[8] = {
+      mode: "redownload_resolved",
+      alternatives: [
+        { title: "Chosen", seasonNumber: 4, episodeNumber: 5, ratingKey: "rk1" }
+      ]
+    };
+
+    await handleCallback(bot, {
+      id: "cb",
+      data: "redl_pick_specific_rk1",
+      message: { chat: { id: 8 }, message_id: 18 }
+    });
+
+    expect(mockHandleRedownload).toHaveBeenCalledWith(
+      bot,
+      8,
+      expect.objectContaining({
+        title: "Chosen",
+        seasonNumber: 4,
+        episodeNumber: 5
+      })
+    );
+    expect(pending[8]).toBeUndefined();
+  });
+
+  test("redl_cancel_resolved clears pending state", async () => {
+    const bot = createMockBot({
+      sendMessage: jest.fn().mockResolvedValue({})
+    });
+
+    pending[10] = { mode: "redownload_resolved" };
+
+    await handleCallback(bot, {
+      id: "cb",
+      data: "redl_cancel_resolved",
+      message: { chat: { id: 10 }, message_id: 19 }
+    });
+
+    expect(bot.sendMessage).toHaveBeenCalledWith(10, "Cancelled.");
+    expect(pending[10]).toBeUndefined();
+  });
 });
 
 describe("callbackHandler tidy flows", () => {
@@ -240,6 +398,48 @@ describe("callbackHandler tidy flows", () => {
       expect.objectContaining({ parse_mode: "Markdown" })
     );
     expect(pending[3]).toBeUndefined();
+  });
+
+  test("tidy_pick renders selection keyboard", async () => {
+    const bot = createMockBot({
+      answerCallbackQuery: jest.fn().mockResolvedValue()
+    });
+
+    pending[4] = {
+      mode: "tidy",
+      seriesList: [{ id: 1, title: "Show" }, { id: 2, title: "Alt" }]
+    };
+
+    await handleCallback(bot, {
+      id: "cb",
+      data: "tidy_pick",
+      message: { chat: { id: 4 }, message_id: 40 }
+    });
+
+    expect(mockSafeEditMessage).toHaveBeenCalledWith(
+      bot,
+      4,
+      40,
+      "Select the correct show:",
+      expect.objectContaining({ reply_markup: expect.any(Object) })
+    );
+  });
+
+  test("tidy_cancelpick clears pending prompt", async () => {
+    const bot = createMockBot({
+      answerCallbackQuery: jest.fn().mockResolvedValue()
+    });
+
+    pending[5] = { mode: "tidy" };
+
+    await handleCallback(bot, {
+      id: "cb",
+      data: "tidy_cancelpick",
+      message: { chat: { id: 5 }, message_id: 41 }
+    });
+
+    expect(mockSafeEditMessage).toHaveBeenCalledWith( bot, 5, 41, "❌ Selection cancelled." );
+    expect(pending[5]).toBeUndefined();
   });
 });
 

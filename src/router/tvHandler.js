@@ -26,7 +26,7 @@ import {
 import { pending } from "../state/pending.js";
 import { findSeriesInCache } from "../cache/sonarrCache.js";
 import { loadConfig } from "../config.js";
-import { resolveCWAmbiguous } from "../llm/classify.js";
+import { resolveCWAmbiguous, resolveTidyAmbiguous } from "../llm/classify.js";
 
 const config = loadConfig();
 
@@ -307,6 +307,156 @@ async function _runFullExplicitRedownload(bot, chatId, title, season, episode, s
 //  FULLY WATCHED SEASONS WORKFLOW
 // ─────────────────────────────────────────────
 
+async function getFullyWatchedEntries(config) {
+  // 1️⃣ PLEX: get all shows and their fully watched seasons
+  const plexShows = await getAllPlexShows(config);
+  console.log(`[fw] Plex shows: ${plexShows.length}`);
+
+  const plexShowSeasons = [];
+
+  for (const show of plexShows) {
+    const seasons = await getPlexSeasons(config, show.ratingKey);
+    if (!seasons || seasons.length === 0) continue;
+
+    const fullyWatched = seasons.filter(
+      (s) =>
+        s.seasonNumber !== 0 &&
+        s.leafCount > 0 &&
+        s.viewedLeafCount === s.leafCount
+    );
+
+    if (fullyWatched.length > 0) {
+      plexShowSeasons.push({
+        plexTitle: show.title,
+        ratingKey: show.ratingKey,
+        seasons: fullyWatched
+      });
+    }
+  }
+
+  console.log(`[fw] Shows with at least one fully watched Plex season: ${plexShowSeasons.length}`);
+
+  if (plexShowSeasons.length === 0) {
+    return [];
+  }
+
+  // 2️⃣ SONARR CROSS-REF
+  const aggregate = new Map();
+
+  for (const item of plexShowSeasons) {
+    const { plexTitle, seasons: plexSeasons } = item;
+
+    const matches = findSeriesInCache(global.sonarrCache || [], plexTitle);
+    if (!matches || matches.length === 0) {
+      console.log(`[fw] No Sonarr match for Plex show: ${plexTitle}`);
+      continue;
+    }
+
+    const series = matches[0];
+    console.log(`[fw] Plex "${plexTitle}" → Sonarr "${series.title}" (id=${series.id})`);
+
+    const seriesData = await getSeriesById(series.id);
+    if (!seriesData || !Array.isArray(seriesData.seasons)) {
+      console.log(`[fw] No seasons from Sonarr for id=${series.id}`);
+      continue;
+    }
+
+    const sonarrSeasons = seriesData.seasons;
+
+    for (const plexSeason of plexSeasons) {
+      const sonarrSeason = sonarrSeasons.find(
+        (s) => s.seasonNumber === plexSeason.seasonNumber
+      );
+      if (!sonarrSeason) {
+        console.log(
+          `[fw] No Sonarr season match for "${series.title}" S${plexSeason.seasonNumber}`
+        );
+        continue;
+      }
+
+      const stats = sonarrSeason.statistics || {};
+
+      // Fully aired? episodeCount == totalEpisodeCount
+      if (stats.episodeCount !== stats.totalEpisodeCount) {
+        console.log(
+          `[fw] Skipping ${series.title} S${sonarrSeason.seasonNumber} – not fully aired (episodeCount=${stats.episodeCount}, total=${stats.totalEpisodeCount})`
+        );
+        continue;
+      }
+
+      // Has files?
+      if (!stats.sizeOnDisk || stats.sizeOnDisk <= 0) {
+        console.log(
+          `[fw] Skipping ${series.title} S${sonarrSeason.seasonNumber} – no sizeOnDisk`
+        );
+        continue;
+      }
+
+      const seriesId = series.id;
+      let entry = aggregate.get(seriesId);
+      if (!entry) {
+        entry = {
+          seriesId,
+          title: series.title,
+          seasons: []
+        };
+        aggregate.set(seriesId, entry);
+      }
+
+      entry.seasons.push({
+        seasonNumber: sonarrSeason.seasonNumber,
+        episodeCount: stats.episodeCount,
+        sizeOnDisk: stats.sizeOnDisk,
+        lastViewedAt: plexSeason.lastViewedAt || 0
+      });
+    }
+  }
+
+  // 3️⃣ BUILD OUTPUT LIST
+  return Array.from(aggregate.values())
+    .map((entry) => {
+      const bySeason = new Map();
+      for (const s of entry.seasons) {
+        const existing = bySeason.get(s.seasonNumber);
+        if (!existing) {
+          bySeason.set(s.seasonNumber, { ...s });
+        } else {
+          existing.episodeCount += s.episodeCount;
+          existing.sizeOnDisk += s.sizeOnDisk;
+          existing.lastViewedAt = Math.max(existing.lastViewedAt || 0, s.lastViewedAt || 0);
+        }
+      }
+
+      const seasons = Array.from(bySeason.values()).sort(
+        (a, b) => a.seasonNumber - b.seasonNumber
+      );
+
+      const totalEpisodes = seasons.reduce(
+        (sum, s) => sum + s.episodeCount,
+        0
+      );
+      const totalSize = seasons.reduce(
+        (sum, s) => sum + s.sizeOnDisk,
+        0
+      );
+      const lastViewedAt = seasons.reduce(
+        (max, s) => Math.max(max, s.lastViewedAt || 0),
+        0
+      );
+
+      return {
+        seriesId: entry.seriesId,
+        title: entry.title,
+        seasons,
+        totalEpisodes,
+        totalSize,
+        lastViewedAt
+      };
+    })
+    .filter((entry) => entry.seasons.length > 0)
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+
 export async function handleListFullyWatched(bot, chatId) {
   console.log("───────────── FULLY WATCHED DEBUG ─────────────");
   console.log("DEBUG CONFIG:", {
@@ -321,152 +471,10 @@ export async function handleListFullyWatched(bot, chatId) {
       "Checking Plex and Sonarr for fully watched, fully aired seasons. This may take a few seconds…"
     );
 
-    // 1️⃣ PLEX: get all shows and their fully watched seasons
-    const plexShows = await getAllPlexShows(config);
-    console.log(`[fw] Plex shows: ${plexShows.length}`);
-
-    const plexShowSeasons = [];
-
-    for (const show of plexShows) {
-      const seasons = await getPlexSeasons(config, show.ratingKey);
-      if (!seasons || seasons.length === 0) continue;
-
-      const fullyWatched = seasons.filter(
-        (s) =>
-          s.seasonNumber !== 0 &&
-          s.leafCount > 0 &&
-          s.viewedLeafCount === s.leafCount
-      );
-
-      if (fullyWatched.length > 0) {
-        plexShowSeasons.push({
-          plexTitle: show.title,
-          ratingKey: show.ratingKey,
-          seasons: fullyWatched
-        });
-      }
-    }
-
-    console.log(`[fw] Shows with at least one fully watched Plex season: ${plexShowSeasons.length}`);
-
-    if (plexShowSeasons.length === 0) {
-      await bot.sendMessage(chatId, "No fully watched seasons found in Plex.");
-      console.log("───────────── END FULLY WATCHED DEBUG ─────────────\n");
-      return;
-    }
-
-    // 2️⃣ SONARR CROSS-REF
-    const aggregate = new Map();
-
-    for (const item of plexShowSeasons) {
-      const { plexTitle, seasons: plexSeasons } = item;
-
-      const matches = findSeriesInCache(global.sonarrCache || [], plexTitle);
-      if (!matches || matches.length === 0) {
-        console.log(`[fw] No Sonarr match for Plex show: ${plexTitle}`);
-        continue;
-      }
-
-      const series = matches[0];
-      console.log(`[fw] Plex "${plexTitle}" → Sonarr "${series.title}" (id=${series.id})`);
-
-      const seriesData = await getSeriesById(series.id);
-      if (!seriesData || !Array.isArray(seriesData.seasons)) {
-        console.log(`[fw] No seasons from Sonarr for id=${series.id}`);
-        continue;
-      }
-
-      const sonarrSeasons = seriesData.seasons;
-
-      for (const plexSeason of plexSeasons) {
-        const sonarrSeason = sonarrSeasons.find(
-          (s) => s.seasonNumber === plexSeason.seasonNumber
-        );
-        if (!sonarrSeason) {
-          console.log(
-            `[fw] No Sonarr season match for "${series.title}" S${plexSeason.seasonNumber}`
-          );
-          continue;
-        }
-
-        const stats = sonarrSeason.statistics || {};
-
-        // Fully aired? episodeCount == totalEpisodeCount
-        if (stats.episodeCount !== stats.totalEpisodeCount) {
-          console.log(
-            `[fw] Skipping ${series.title} S${sonarrSeason.seasonNumber} – not fully aired (episodeCount=${stats.episodeCount}, total=${stats.totalEpisodeCount})`
-          );
-          continue;
-        }
-
-        // Has files?
-        if (!stats.sizeOnDisk || stats.sizeOnDisk <= 0) {
-          console.log(
-            `[fw] Skipping ${series.title} S${sonarrSeason.seasonNumber} – no sizeOnDisk`
-          );
-          continue;
-        }
-
-        const seriesId = series.id;
-        let entry = aggregate.get(seriesId);
-        if (!entry) {
-          entry = {
-            title: series.title,
-            seasons: []
-          };
-          aggregate.set(seriesId, entry);
-        }
-
-        entry.seasons.push({
-            seasonNumber: sonarrSeason.seasonNumber,
-            episodeCount: stats.episodeCount,
-            sizeOnDisk: stats.sizeOnDisk
-          });
-      }
-    }
-
-    // 3️⃣ BUILD OUTPUT LIST
-    const finalEntries = Array.from(aggregate.values())
-      .map((entry) => {
-        const bySeason = new Map();
-        for (const s of entry.seasons) {
-          const existing = bySeason.get(s.seasonNumber);
-          if (!existing) {
-            bySeason.set(s.seasonNumber, { ...s });
-          } else {
-            existing.episodeCount += s.episodeCount;
-            existing.sizeOnDisk += s.sizeOnDisk;
-          }
-        }
-
-        const seasons = Array.from(bySeason.values()).sort(
-          (a, b) => a.seasonNumber - b.seasonNumber
-        );
-
-        const totalEpisodes = seasons.reduce(
-          (sum, s) => sum + s.episodeCount,
-          0
-        );
-        const totalSize = seasons.reduce(
-          (sum, s) => sum + s.sizeOnDisk,
-          0
-        );
-
-        return {
-          title: entry.title,
-          seasons,
-          totalEpisodes,
-          totalSize
-        };
-      })
-      .filter((entry) => entry.seasons.length > 0)
-      .sort((a, b) => a.title.localeCompare(b.title));
+    const finalEntries = await getFullyWatchedEntries(config);
 
     if (finalEntries.length === 0) {
-      await bot.sendMessage(
-        chatId,
-        "No fully watched, fully aired seasons with files were found."
-      );
+      await bot.sendMessage(chatId, "No fully watched seasons found in Plex.");
       console.log("───────────── END FULLY WATCHED DEBUG ─────────────\n");
       return;
     }
@@ -571,21 +579,42 @@ export async function buildTidyConfirmation(selected, season, config) {
   return { msg, fileIds, sizeOnDisk };
 }
 
-export async function handleTidySeason(bot, chatId, entities, statusId) {
-  console.log("───────────── TIDY SEASON DEBUG ─────────────");
+async function sendTidyPrompt(bot, chatId, selected, season, config, seriesList, statusId) {
+  const choices = seriesList && seriesList.length > 0 ? seriesList : [selected];
+  const { msg, fileIds, sizeOnDisk } = await buildTidyConfirmation(
+    selected,
+    season,
+    config
+  );
 
-  const title = entities.title;
-  const season = Number(entities.seasonNumber);
+  await clearPendingPrompt(bot, chatId);
 
-  if (!title) {
-    await bot.sendMessage(chatId, "I need a show title to tidy.");
-    return;
+  pending[chatId] = {
+    mode: "tidy",
+    seriesList: choices,
+    selectedSeries: selected,
+    seriesId: selected.id,
+    title: selected.title,
+    season,
+    fileIds,
+    sizeOnDisk
+  };
+
+  const sent = await bot.sendMessage(chatId, msg, {
+    parse_mode: "Markdown",
+    ...yesNoPickTidyKeyboard(choices)
+  });
+
+  if (sent?.message_id) {
+    pending[chatId].messageId = sent.message_id;
   }
-  if (!season || isNaN(season)) {
-    await bot.sendMessage(chatId, "You didn't specify a season number.");
-    return;
-  }
 
+  if (statusId) {
+    await clearStatus(bot, chatId, statusId);
+  }
+}
+
+async function runExplicitTidySeason(bot, chatId, title, season, statusId) {
   try {
     const config = loadConfig();
 
@@ -593,48 +622,150 @@ export async function handleTidySeason(bot, chatId, entities, statusId) {
       await updateStatus(bot, chatId, statusId, "Searching…");
     }
 
-    // Find in cache
     const matches = findSeriesInCache(global.sonarrCache || [], title);
 
     if (!matches || matches.length === 0) {
       await bot.sendMessage(chatId, `No results for ${title}`);
+      if (statusId) await clearStatus(bot, chatId, statusId);
       return;
     }
 
-    // AUTO-SELECT FIRST MATCH (LIKE REDOWNLOAD)
     const selected = matches[0];
-    const validSeries = matches; // for pick-other flow
-
-    // Build tidy confirmation for THIS default selection
-    const { msg, fileIds, sizeOnDisk } = await buildTidyConfirmation(
-      selected,
-      season,
-      config
-    );
-
-    // Store pending state like redownload
-    pending[chatId] = {
-      mode: "tidy",
-      seriesList: validSeries,
-      selectedSeries: selected,
-      seriesId: selected.id,
-      title: selected.title,
-      season,
-      fileIds,
-      sizeOnDisk
-    };
-
-    // Send confirmation with Yes / No / Pick Another
-    await bot.sendMessage(chatId, msg, {
-      parse_mode: "Markdown",
-      ...yesNoPickTidyKeyboard(validSeries)
-    });
-
-    if (statusId) await clearStatus(bot, chatId, statusId);
+    await sendTidyPrompt(bot, chatId, selected, season, config, matches, statusId);
   } catch (err) {
     console.error("[tvHandler] ERROR in handleTidySeason:", err);
+    if (statusId) await clearStatus(bot, chatId, statusId);
     await bot.sendMessage(chatId, "Error preparing tidy-up.");
   }
+}
 
+function tidyNormalize(str) {
+  return (str || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildTidyOptionsFromEntries(entries) {
+  return entries.flatMap((entry) =>
+    entry.seasons.map((season) => ({
+      title: entry.title,
+      seriesId: entry.seriesId,
+      seasonNumber: season.seasonNumber,
+      lastViewedAt: season.lastViewedAt || entry.lastViewedAt || 0
+    }))
+  );
+}
+
+async function startTidyFromOption(bot, chatId, option, config, statusId) {
+  const allSeries = global.sonarrCache || [];
+  const matches = findSeriesInCache(allSeries, option.title) || [];
+  let selected = matches.find((s) => s.id === option.seriesId);
+
+  if (!selected) {
+    selected = allSeries.find((s) => s.id === option.seriesId) || matches[0];
+  }
+
+  if (!selected) {
+    await bot.sendMessage(chatId, `No results for ${option.title}`);
+    if (statusId) await clearStatus(bot, chatId, statusId);
+    return;
+  }
+
+  await sendTidyPrompt(bot, chatId, selected, option.seasonNumber, config, matches, statusId);
+}
+
+async function runAmbiguousTidySeason(bot, chatId, reference, statusId) {
+  try {
+    const config = loadConfig();
+
+    if (statusId) {
+      await updateStatus(bot, chatId, statusId, "Checking finished seasons…");
+    }
+
+    const entries = await getFullyWatchedEntries(config);
+    if (!entries || entries.length === 0) {
+      if (statusId) await clearStatus(bot, chatId, statusId);
+      await bot.sendMessage(chatId, "I couldn't find any finished seasons ready to tidy.");
+      return;
+    }
+
+    const options = buildTidyOptionsFromEntries(entries);
+    if (options.length === 0) {
+      if (statusId) await clearStatus(bot, chatId, statusId);
+      await bot.sendMessage(chatId, "I couldn't find any finished seasons ready to tidy.");
+      return;
+    }
+
+    const ref = tidyNormalize(reference);
+    const literalMatches = options.filter((opt) => {
+      const title = tidyNormalize(opt.title);
+      return ref.includes(title) || title.includes(ref);
+    });
+
+    if (literalMatches.length > 0) {
+      literalMatches.sort((a, b) => {
+        const recency = (b.lastViewedAt || 0) - (a.lastViewedAt || 0);
+        return recency !== 0 ? recency : b.seasonNumber - a.seasonNumber;
+      });
+
+      await startTidyFromOption(bot, chatId, literalMatches[0], config, statusId);
+      return;
+    }
+
+    const llmOptions = options.map((opt) => ({ title: opt.title, season: opt.seasonNumber }));
+    const llmResult = await resolveTidyAmbiguous(config, reference, llmOptions);
+
+    if (!llmResult || llmResult.best === "none") {
+      if (statusId) await clearStatus(bot, chatId, statusId);
+      await bot.sendMessage(chatId, "I couldn't figure out which season to tidy. Tell me the season number?");
+      return;
+    }
+
+    const match = options.find(
+      (opt) =>
+        opt.title === llmResult.best.title &&
+        opt.seasonNumber === llmResult.best.season
+    );
+
+    if (!match) {
+      if (statusId) await clearStatus(bot, chatId, statusId);
+      await bot.sendMessage(chatId, "I couldn't find that finished season. Tell me the season number?");
+      return;
+    }
+
+    await startTidyFromOption(bot, chatId, match, config, statusId);
+  } catch (err) {
+    console.error("[tvHandler] ERROR resolving tidy request:", err);
+    if (statusId) await clearStatus(bot, chatId, statusId);
+    await bot.sendMessage(chatId, "Error preparing tidy-up.");
+  }
+}
+
+export async function handleTidySeason(bot, chatId, entities, statusId) {
+  console.log("───────────── TIDY SEASON DEBUG ─────────────");
+
+  const title = (entities.title || "").trim();
+  const season = Number(entities.seasonNumber);
+  const reference = (entities.reference || "").trim();
+
+  const hasTitle = title.length > 0;
+  const hasSeason = Number.isFinite(season) && season > 0;
+
+  if (hasTitle && hasSeason) {
+    await runExplicitTidySeason(bot, chatId, title, season, statusId);
+    console.log("───────────── END TIDY SEASON DEBUG ─────────────\n");
+    return;
+  }
+
+  const fallbackRef = reference || title;
+  if (!fallbackRef) {
+    await bot.sendMessage(chatId, "I need a show title to tidy.");
+    console.log("───────────── END TIDY SEASON DEBUG ─────────────\n");
+    return;
+  }
+
+  await runAmbiguousTidySeason(bot, chatId, fallbackRef, statusId);
   console.log("───────────── END TIDY SEASON DEBUG ─────────────\n");
 }

@@ -32,9 +32,11 @@ jest.unstable_mockModule("../../../src/telegram/statusMessage.js", () => ({
 }));
 
 const mockResolveCWAmbiguous = jest.fn();
+const mockResolveTidyAmbiguous = jest.fn();
 
 jest.unstable_mockModule("../../../src/llm/classify.js", () => ({
-  resolveCWAmbiguous: mockResolveCWAmbiguous
+  resolveCWAmbiguous: mockResolveCWAmbiguous,
+  resolveTidyAmbiguous: mockResolveTidyAmbiguous
 }));
 
 jest.unstable_mockModule("../../../src/config.js", () => ({
@@ -61,6 +63,7 @@ describe("tvHandler redownload flow", () => {
     mockGetCurrentlyWatchingShows.mockReset();
     mockFuzzyMatchCW.mockReset();
     mockResolveCWAmbiguous.mockReset();
+    mockResolveTidyAmbiguous.mockReset();
     mockGetAllPlexShows.mockReset();
     mockGetPlexSeasons.mockReset();
     mockGetSeriesById.mockReset();
@@ -154,6 +157,11 @@ describe("tvHandler redownload flow", () => {
 
 describe("tidy/list fully watched helpers", () => {
   beforeEach(() => {
+    mockGetEpisodes.mockReset();
+    mockGetSeriesById.mockReset();
+    mockGetAllPlexShows.mockReset();
+    mockGetPlexSeasons.mockReset();
+    mockResolveTidyAmbiguous.mockReset();
     Object.keys(pending).forEach((key) => delete pending[key]);
   });
 
@@ -256,5 +264,75 @@ describe("tidy/list fully watched helpers", () => {
     const lastCall = bot.sendMessage.mock.calls.at(-1);
     expect(lastCall[0]).toBe(15);
     expect(lastCall[1]).toContain("Fully watched seasons");
+  });
+
+  test("ambiguous tidy uses literal finished-season match", async () => {
+    const bot = createMockBot({
+      sendMessage: jest.fn().mockResolvedValue({ message_id: 400 }),
+      deleteMessage: jest.fn().mockResolvedValue()
+    });
+
+    mockGetAllPlexShows.mockResolvedValue([{ title: "Bake Off", ratingKey: "rk" }]);
+    mockGetPlexSeasons.mockResolvedValue([
+      { seasonNumber: 13, viewedLeafCount: 10, leafCount: 10, lastViewedAt: 999 }
+    ]);
+    mockGetSeriesById.mockResolvedValue({
+      seasons: [
+        {
+          seasonNumber: 13,
+          statistics: { episodeCount: 10, totalEpisodeCount: 10, sizeOnDisk: 5000000000 }
+        }
+      ]
+    });
+    mockGetEpisodes.mockResolvedValue([{ seasonNumber: 13, episodeFileId: 1 }]);
+
+    global.sonarrCache = [{ id: 25, title: "Bake Off" }];
+
+    await handleTidySeason(
+      bot,
+      22,
+      { title: "", seasonNumber: 0, reference: "tidy up bake off" },
+      null
+    );
+
+    expect(mockResolveTidyAmbiguous).not.toHaveBeenCalled();
+    expect(pending[22]).toMatchObject({ mode: "tidy", season: 13, seriesId: 25 });
+  });
+
+  test("ambiguous tidy falls back to LLM", async () => {
+    const bot = createMockBot({
+      sendMessage: jest.fn().mockResolvedValue({ message_id: 401 }),
+      deleteMessage: jest.fn().mockResolvedValue()
+    });
+
+    mockGetAllPlexShows.mockResolvedValue([{ title: "Mystery Show", ratingKey: "ms" }]);
+    mockGetPlexSeasons.mockResolvedValue([
+      { seasonNumber: 2, viewedLeafCount: 8, leafCount: 8, lastViewedAt: 200 }
+    ]);
+    mockGetSeriesById.mockResolvedValue({
+      seasons: [
+        {
+          seasonNumber: 2,
+          statistics: { episodeCount: 8, totalEpisodeCount: 8, sizeOnDisk: 2000000000 }
+        }
+      ]
+    });
+    mockGetEpisodes.mockResolvedValue([{ seasonNumber: 2, episodeFileId: 9 }]);
+
+    mockResolveTidyAmbiguous.mockResolvedValue({
+      best: { title: "Mystery Show", season: 2 }
+    });
+
+    global.sonarrCache = [{ id: 30, title: "Mystery Show" }];
+
+    await handleTidySeason(
+      bot,
+      50,
+      { title: "", seasonNumber: 0, reference: "tidy up the finale" },
+      null
+    );
+
+    expect(mockResolveTidyAmbiguous).toHaveBeenCalled();
+    expect(pending[50]).toMatchObject({ mode: "tidy", season: 2, seriesId: 30 });
   });
 });

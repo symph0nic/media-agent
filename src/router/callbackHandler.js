@@ -409,6 +409,12 @@ if (action === "tidy_yes") {
   const { fileIds, title, season, seriesId, sizeOnDisk } = state;
 
   try {
+    try {
+      await bot.answerCallbackQuery(query.id, { text: "Tidying season…" });
+    } catch (ackErr) {
+      console.error("Failed to acknowledge tidy callback:", ackErr?.message || ackErr);
+    }
+
     await bot.sendChatAction(chatId, "typing");
 
     // 1️⃣ Delete episode files
@@ -430,12 +436,11 @@ if (action === "tidy_yes") {
     }
 
     // 3️⃣ Modify seasons → set monitored=false for the tidy season
-    series.seasons = series.seasons.map(s => {
-      if (Number(s.seasonNumber) === Number(season)) {
-        s.monitored = false;
-      }
-      return s;
-    });
+    const targetSeason = Number(season);
+    series.seasons = series.seasons.map((s) => ({
+      ...s,
+      monitored: Number(s.seasonNumber) === targetSeason ? false : s.monitored
+    }));
 
     // n8n logic: keep overall series monitored = true
     series.monitored = true;
@@ -473,7 +478,6 @@ if (action === "tidy_yes") {
   }
 
   delete pending[chatId];
-  await bot.answerCallbackQuery(query.id);
   return;
 }
 

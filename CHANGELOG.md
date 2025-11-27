@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/symph0nic/media-agent/compare/v1.3.0...v1.4.0) (2025-11-27)
+
+### Features
+
+* Added ambiguous tidy and more tests ([f99c84c](https://github.com/symph0nic/media-agent/commit/f99c84c8c866db664ed712410524c240e798ae2e))
+
 ## [1.3.0](https://github.com/symph0nic/media-agent/compare/v1.2.0...v1.3.0) (2025-11-25)
 
 ### Features

@@ -1,3 +1,9 @@
+## [1.4.1](https://github.com/symph0nic/media-agent/compare/v1.4.0...v1.4.1) (2025-11-28)
+
+### Bug Fixes
+
+* Optimize cleanup and updated healthcheck for docker ([722a3a1](https://github.com/symph0nic/media-agent/commit/722a3a150b870d627cba00189a8d19bb401d374e))
+
 ## [1.4.0](https://github.com/symph0nic/media-agent/compare/v1.3.0...v1.4.0) (2025-11-27)
 
 ### Features

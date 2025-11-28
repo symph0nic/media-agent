@@ -207,12 +207,35 @@ npm start
 ```
 
 ### With Docker
+Use your preferred approach:
+
+**docker CLI**
 ```
 
 docker build -t media-agent .
 docker run --env-file .env media-agent
 
 ```
+
+**docker compose**
+Create a `docker-compose.yml` next to `.env`:
+```
+version: "3.9"
+services:
+  media-agent:
+    build: .
+    env_file: .env
+    container_name: media-agent
+    restart: unless-stopped
+    working_dir: /app
+    command: ["npm", "start"]
+    healthcheck:
+      test: ["CMD", "node", "src/healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+Then run `docker compose up -d`.
 
 ## 🧪 Testing
 

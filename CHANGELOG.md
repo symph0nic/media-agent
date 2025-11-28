@@ -1,3 +1,9 @@
+## [1.6.2](https://github.com/symph0nic/media-agent/compare/v1.6.1...v1.6.2) (2025-11-28)
+
+### Bug Fixes
+
+* Added docker compose info to readme ([3cd21f6](https://github.com/symph0nic/media-agent/commit/3cd21f6cf0019612877fe2022d1bfd0f191104f3))
+
 ## [1.6.1](https://github.com/symph0nic/media-agent/compare/v1.6.0...v1.6.1) (2025-11-28)
 
 ### Bug Fixes

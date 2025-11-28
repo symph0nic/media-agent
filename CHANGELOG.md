@@ -1,3 +1,9 @@
+## [1.6.0](https://github.com/symph0nic/media-agent/compare/v1.5.0...v1.6.0) (2025-11-28)
+
+### Features
+
+* Added 'optimize tv' and list profiles for both tv and movies ([12e5105](https://github.com/symph0nic/media-agent/commit/12e5105620b64d7758492e5aa12fed5bba39fa32))
+
 ## [1.5.0](https://github.com/symph0nic/media-agent/compare/v1.4.1...v1.5.0) (2025-11-28)
 
 ### Features

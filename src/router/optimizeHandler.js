@@ -1,7 +1,18 @@
-import { listAllMovies, getRadarrQualityProfiles, editMoviesQualityProfile, searchMovies } from "../tools/radarr.js";
+import {
+  listAllMovies,
+  getRadarrQualityProfiles,
+  editMoviesQualityProfile,
+  searchMovies
+} from "../tools/radarr.js";
+import {
+  listAllSeries,
+  getSonarrQualityProfiles,
+  updateSeries,
+  runSeriesSearch
+} from "../tools/sonarr.js";
 import { pending } from "../state/pending.js";
 import { formatBytes } from "../tools/format.js";
-import { logError, logInfo } from "../logger.js";
+import { logError } from "../logger.js";
 import { safeEditMessage } from "../telegram/safeEdit.js";
 
 const DEFAULT_LIMIT = 20;
@@ -15,6 +26,17 @@ function clampLimit(n) {
 function parseLimit(reference) {
   const match = reference?.match(/(\d{1,2})/);
   return clampLimit(match ? Number(match[1]) : DEFAULT_LIMIT);
+}
+
+function extractProfileRequest(reference = "") {
+  if (!reference) return { cleaned: "", requested: "" };
+  const regex = /\b(?:profile|to)\s+([a-z0-9][a-z0-9 \-+]{1,})$/i;
+  const match = reference.match(regex);
+  if (!match) return { cleaned: reference.trim(), requested: "" };
+  return {
+    cleaned: reference.replace(regex, "").trim(),
+    requested: match[1].trim()
+  };
 }
 
 function estimateSavings(bytes) {
@@ -35,7 +57,32 @@ function pickTargetProfile(profiles, targetName) {
   return profiles[0];
 }
 
-function buildSummary(candidates, targetProfile) {
+function getMinSizeBytes(kind) {
+  const fallback = Number(process.env.OPTIMIZE_MIN_SIZE_GB || 40);
+  const raw =
+    kind === "tv"
+      ? Number(process.env.OPTIMIZE_TV_MIN_SIZE_GB || process.env.OPTIMIZE_MIN_SIZE_GB || fallback)
+      : Number(process.env.OPTIMIZE_MIN_SIZE_GB || 40);
+  const gb = Number.isFinite(raw) && raw > 0 ? raw : 40;
+  return gb * 1024 * 1024 * 1024;
+}
+
+function getTargetProfileName(kind) {
+  if (kind === "tv") {
+    return process.env.OPTIMIZE_TV_TARGET_PROFILE || process.env.OPTIMIZE_TARGET_PROFILE || "";
+  }
+  return process.env.OPTIMIZE_TARGET_PROFILE || "";
+}
+
+function getSeriesProfileId(series) {
+  return (
+    Number(series.qualityProfileId) ||
+    Number(series.qualityProfile?.id) ||
+    0
+  );
+}
+
+function buildMovieSummary(candidates, targetProfile) {
   const lines = [];
   const totalSavings = candidates.reduce(
     (sum, c) => sum + estimateSavings(c.sizeOnDisk || 0),
@@ -64,11 +111,11 @@ function buildSummary(candidates, targetProfile) {
   return lines.join("\n");
 }
 
-export async function handleOptimizeMovies(bot, chatId, entities, config) {
+export async function handleOptimizeMovies(bot, chatId, entities) {
   try {
-    const limit = parseLimit(entities.reference);
-    const minSizeGb = Number(process.env.OPTIMIZE_MIN_SIZE_GB || 40);
-    const minBytes = minSizeGb * 1024 * 1024 * 1024;
+    const { cleaned, requested } = extractProfileRequest(entities.reference || "");
+    const limit = parseLimit(cleaned);
+    const minBytes = getMinSizeBytes("movie");
 
     const [movies, profiles] = await Promise.all([
       listAllMovies(),
@@ -77,7 +124,7 @@ export async function handleOptimizeMovies(bot, chatId, entities, config) {
 
     const targetProfile = pickTargetProfile(
       profiles,
-      process.env.OPTIMIZE_TARGET_PROFILE || ""
+      requested || getTargetProfileName("movie")
     );
 
     if (!targetProfile) {
@@ -89,7 +136,16 @@ export async function handleOptimizeMovies(bot, chatId, entities, config) {
     }
 
     const candidates = movies
-      .filter((m) => (m.sizeOnDisk || 0) >= minBytes && m.hasFile)
+      .filter((m) => {
+        const size = m.sizeOnDisk || 0;
+        const currentProfile =
+          Number(m.qualityProfileId) ||
+          Number(m.qualityProfile?.id) ||
+          0;
+        const sameProfile =
+          targetProfile && currentProfile === Number(targetProfile.id);
+        return size >= minBytes && m.hasFile && !sameProfile;
+      })
       .sort((a, b) => (b.sizeOnDisk || 0) - (a.sizeOnDisk || 0))
       .slice(0, limit);
 
@@ -98,7 +154,7 @@ export async function handleOptimizeMovies(bot, chatId, entities, config) {
       return;
     }
 
-    const summary = buildSummary(candidates, targetProfile);
+    const summary = buildMovieSummary(candidates, targetProfile);
     const msg = await bot.sendMessage(chatId, summary, {
       parse_mode: "Markdown",
       reply_markup: {
@@ -112,6 +168,7 @@ export async function handleOptimizeMovies(bot, chatId, entities, config) {
 
     pending[chatId] = {
       mode: "optimize_movies",
+      kind: "movie",
       candidates,
       selected: [],
       targetProfileId: targetProfile.id,
@@ -120,6 +177,81 @@ export async function handleOptimizeMovies(bot, chatId, entities, config) {
   } catch (err) {
     logError(`[optimize] failed: ${err.message}`);
     await bot.sendMessage(chatId, "Unable to prepare optimization right now.");
+  }
+}
+
+export async function handleOptimizeShows(bot, chatId, entities) {
+  try {
+    const { cleaned, requested } = extractProfileRequest(entities.reference || "");
+    const limit = parseLimit(cleaned);
+    const minBytes = getMinSizeBytes("tv");
+
+    const [seriesList, profiles] = await Promise.all([
+      listAllSeries(),
+      getSonarrQualityProfiles()
+    ]);
+
+    const targetProfile = pickTargetProfile(
+      profiles,
+      requested || getTargetProfileName("tv")
+    );
+
+    if (!targetProfile) {
+      await bot.sendMessage(
+        chatId,
+        "No Sonarr quality profiles found. Set OPTIMIZE_TV_TARGET_PROFILE or ensure Sonarr is reachable."
+      );
+      return;
+    }
+
+    const candidates = seriesList
+      .filter((s) => {
+        const stats = s.statistics || {};
+        const size = stats.sizeOnDisk || s.sizeOnDisk || 0;
+        const files = stats.episodeFileCount || 0;
+        const sameProfile =
+          targetProfile && getSeriesProfileId(s) === Number(targetProfile.id);
+        return size >= minBytes && files > 0 && !sameProfile;
+      })
+      .sort(
+        (a, b) =>
+          (b.statistics?.sizeOnDisk || b.sizeOnDisk || 0) -
+          (a.statistics?.sizeOnDisk || a.sizeOnDisk || 0)
+      )
+      .slice(0, limit);
+
+    if (!candidates.length) {
+      await bot.sendMessage(chatId, "No TV results available for that query.");
+      return;
+    }
+
+    const profileNames = new Map(
+      (profiles || []).map((p) => [p.id, p.name || `profile ${p.id}`])
+    );
+
+    const summary = buildTvSummary(candidates, targetProfile, profileNames);
+    const msg = await bot.sendMessage(chatId, summary, {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "✅ Optimize all", callback_data: "optm_all" }],
+          [{ text: "🗂 Pick titles", callback_data: "optm_pick" }],
+          [{ text: "❌ Cancel", callback_data: "optm_cancel" }]
+        ]
+      }
+    });
+
+    pending[chatId] = {
+      mode: "optimize_tv",
+      kind: "tv",
+      candidates,
+      selected: [],
+      targetProfileId: targetProfile.id,
+      summaryMessageId: msg.message_id
+    };
+  } catch (err) {
+    logError(`[optimize_tv] failed: ${err.message}`);
+    await bot.sendMessage(chatId, "Unable to prepare TV optimization right now.");
   }
 }
 
@@ -141,15 +273,54 @@ function buildPickKeyboard(candidates, selectedIds = []) {
   return { reply_markup: { inline_keyboard: rows } };
 }
 
+function extractSeriesSize(series) {
+  return series.statistics?.sizeOnDisk || series.sizeOnDisk || 0;
+}
+
+function buildTvSummary(candidates, targetProfile, profileNames = new Map()) {
+  const totalSavings = candidates.reduce(
+    (sum, c) => sum + estimateSavings(extractSeriesSize(c)),
+    0
+  );
+  const lines = [];
+  lines.push(
+    `🧠 *TV optimization candidates* — target profile: *${targetProfile?.name || targetProfile?.id || "unknown"}*`
+  );
+  lines.push(`Showing ${candidates.length} largest series (size ≥ filter, sorted by size).`);
+  lines.push(`Potential reclaim: ~${formatBytes(totalSavings)}`);
+  lines.push("");
+
+  candidates.forEach((series, idx) => {
+    const stats = series.statistics || {};
+    const size = formatBytes(extractSeriesSize(series));
+    const estSave = formatBytes(estimateSavings(extractSeriesSize(series)));
+    const episodes = stats.episodeFileCount || 0;
+    const profile =
+      series.qualityProfile?.name ||
+      profileNames.get(series.qualityProfileId) ||
+      series.qualityProfileId ||
+      "unknown profile";
+    lines.push(
+      `${idx + 1}. ${series.title} — ${size} — ${episodes} files — current profile ${profile} — est save ${estSave}`
+    );
+  });
+
+  return lines.join("\n");
+}
+
 export async function handleOptimizeCallback(bot, query) {
   const chatId = query.message.chat.id;
   const data = query.data;
   const state = pending[chatId];
 
-  if (!state || state.mode !== "optimize_movies") {
+  if (
+    !state ||
+    (state.mode !== "optimize_movies" && state.mode !== "optimize_tv")
+  ) {
     await bot.answerCallbackQuery(query.id, { text: "No optimization pending." });
     return;
   }
+  const kind = state.kind || (state.mode === "optimize_tv" ? "tv" : "movie");
 
   if (data === "optm_cancel") {
     await deleteSelectionMessage(bot, chatId, state);
@@ -165,7 +336,8 @@ export async function handleOptimizeCallback(bot, query) {
   }
 
   if (data === "optm_pick") {
-    const pickMsg = await bot.sendMessage(chatId, "Select movies to optimize:", {
+    const label = kind === "tv" ? "series" : "movies";
+    const pickMsg = await bot.sendMessage(chatId, `Select ${label} to optimize:`, {
       ...buildPickKeyboard(state.candidates, state.selected)
     });
     state.selectionMessageId = pickMsg.message_id;
@@ -229,24 +401,39 @@ export async function handleOptimizeCallback(bot, query) {
 
     await bot.answerCallbackQuery(query.id, { text: "Optimizing…" });
     try {
-      await editMoviesQualityProfile(ids, state.targetProfileId);
-      await searchMovies(ids);
-      await replaceSummaryMessage(
-        bot,
-        chatId,
-        state,
-        `✅ Optimization started for ${ids.length} movie(s). Radarr will grab smaller releases if available.`
-      );
+      if (kind === "movie") {
+        await editMoviesQualityProfile(ids, state.targetProfileId);
+        await searchMovies(ids);
+        await replaceSummaryMessage(
+          bot,
+          chatId,
+          state,
+          `✅ Optimization started for ${ids.length} movie(s). Radarr will grab smaller releases if available.`
+        );
+      } else {
+        const chosen = ids
+          .map((id) => state.candidates.find((c) => c.id === id))
+          .filter(Boolean);
+        await applyTvQualityProfile(chosen, state.targetProfileId);
+        await runSeriesSearch(ids);
+        await replaceSummaryMessage(
+          bot,
+          chatId,
+          state,
+          `✅ Optimization started for ${ids.length} series. Sonarr will grab smaller releases if available.`
+        );
+      }
     } catch (err) {
       const detail = err.response?.data
         ? JSON.stringify(err.response.data)
         : err.message;
       logError(`[optimize] apply failed: ${detail}`);
+      const serviceName = kind === "movie" ? "Radarr" : "Sonarr";
       await replaceSummaryMessage(
         bot,
         chatId,
         state,
-        "❌ Could not start optimization. Check Radarr connectivity and quality profile."
+        `❌ Could not start optimization. Check ${serviceName} connectivity and quality profile.`
       );
     }
 
@@ -281,4 +468,56 @@ async function replaceSummaryMessage(bot, chatId, state, text) {
   }
 
   await bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
+}
+
+async function applyTvQualityProfile(seriesEntries, targetProfileId) {
+  for (const series of seriesEntries) {
+    if (!series) continue;
+    try {
+      await updateSeries(series.id, {
+        ...series,
+        qualityProfileId: targetProfileId
+      });
+    } catch (err) {
+      logError(
+        `[optimize_tv] failed to update ${series.title || series.id}: ${err.message}`
+      );
+    }
+  }
+}
+
+export async function handleListTvProfiles(bot, chatId) {
+  try {
+    const profiles = await getSonarrQualityProfiles();
+    if (!profiles || profiles.length === 0) {
+      await bot.sendMessage(chatId, "No Sonarr quality profiles were found.");
+      return;
+    }
+    const lines = ["📋 *Sonarr quality profiles*"];
+    profiles.forEach((p) => {
+      lines.push(`• ${p.name || `Profile ${p.id}`} (id ${p.id})`);
+    });
+    await bot.sendMessage(chatId, lines.join("\n"), { parse_mode: "Markdown" });
+  } catch (err) {
+    logError(`[optimize_tv] list profiles failed: ${err.message}`);
+    await bot.sendMessage(chatId, "Couldn't list Sonarr profiles right now.");
+  }
+}
+
+export async function handleListMovieProfiles(bot, chatId) {
+  try {
+    const profiles = await getRadarrQualityProfiles();
+    if (!profiles || profiles.length === 0) {
+      await bot.sendMessage(chatId, "No Radarr quality profiles were found.");
+      return;
+    }
+    const lines = ["📋 *Radarr quality profiles*"];
+    profiles.forEach((p) => {
+      lines.push(`• ${p.name || `Profile ${p.id}`} (id ${p.id})`);
+    });
+    await bot.sendMessage(chatId, lines.join("\n"), { parse_mode: "Markdown" });
+  } catch (err) {
+    logError(`[optimize_movies] list profiles failed: ${err.message}`);
+    await bot.sendMessage(chatId, "Couldn't list Radarr profiles right now.");
+  }
 }

@@ -82,6 +82,10 @@ Ask “free up disk space” and the bot SSHes to your NAS, finds every `@Recycl
 ### 🧹 qBittorrent cleanup
 Ask “delete unregistered torrents” and the bot lists tracker-unregistered torrents and asks for confirmation. Scope to TV or movies by saying “delete unregistered tv torrents” or “...movies”.
 
+### 📉 Optimize movies & TV
+Say “optimize movies” to see the largest UHD/huge titles that can be downgraded to your `OPTIMIZE_TARGET_PROFILE`. The bot shows estimated savings, lets you pick titles, and automatically changes Radarr quality profiles + triggers searches. Use “optimize tv shows” to do the same for Sonarr series (using `OPTIMIZE_TV_TARGET_PROFILE`) so you can reclaim space from bloated 4K seasons.
+Add “to <profile>” to target a specific quality (e.g. “optimize tv to sd”), and ask “list tv profiles” / “list movie profiles” to see the available Sonarr/Radarr quality profiles before running an optimization.
+
 ### ➕ Add shows or movies
 Natural language add flow: “add severance” or “add the creator movie”. The bot searches Sonarr + Radarr, shows posters/overviews, lets you page results, switch between TV/Movie when both exist, and adds with your default root folder & quality profile. Cards clean up when done.
 
@@ -155,6 +159,9 @@ RADARR_DEFAULT_PROFILE=Any
 OPTIMIZE_TARGET_PROFILE=HD-1080p
 OPTIMIZE_MIN_SIZE_GB=40
 OPTIMIZE_MAX_ITEMS=20
+# Optimization (TV) – optional overrides, falls back to movie values
+OPTIMIZE_TV_TARGET_PROFILE=HD-1080p
+OPTIMIZE_TV_MIN_SIZE_GB=30
 # Skip tiny NAS recycle bins in the UI (Clear-all still empties everything)
 NAS_BIN_MIN_BYTES=1000000
 NAS_BIN_MIN_FILES=10

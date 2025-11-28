@@ -7,6 +7,9 @@ const mockGetEpisodes = jest.fn();
 const mockFindEpisode = jest.fn();
 const mockGetSeriesById = jest.fn();
 const mockUpdateSeries = jest.fn();
+const mockListAllSeries = jest.fn();
+const mockGetSonarrQualityProfiles = jest.fn();
+const mockRunSeriesSearch = jest.fn();
 const mockEmptyRecycleBin = jest.fn();
 const mockAddSeries = jest.fn();
 const mockAddMovie = jest.fn();
@@ -22,9 +25,11 @@ jest.unstable_mockModule("../../../src/tools/sonarr.js", () => ({
   findEpisode: mockFindEpisode,
   getSeriesById: mockGetSeriesById,
   updateSeries: mockUpdateSeries,
+  listAllSeries: mockListAllSeries,
+  getSonarrQualityProfiles: mockGetSonarrQualityProfiles,
+  runSeriesSearch: mockRunSeriesSearch,
   addSeries: mockAddSeries,
   getSonarrRootFolders: jest.fn().mockResolvedValue([{ path: "/tv" }]),
-  getSonarrQualityProfiles: jest.fn().mockResolvedValue([{ id: 1 }]),
   lookupSeries: jest.fn().mockResolvedValue([])
 }));
 

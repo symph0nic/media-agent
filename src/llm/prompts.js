@@ -36,7 +36,10 @@ INTENT OPTIONS:
 - "show_top_rated_tv"
 - "show_top_rated_movies"
 - "optimize_movies"
+- "optimize_tv"
 - "have_media"
+- "list_tv_profiles"
+- "list_movie_profiles"
 - "help"
 - "unknown"
 
@@ -46,6 +49,8 @@ Use "qb_delete_unregistered" when the user asks to clean up qBittorrent unregist
 Use "qb_delete_unregistered_tv" when they mention cleaning up qBittorrent unregistered TV torrents (TV shows, series, qbit TV category).
 Use "qb_delete_unregistered_movies" when they mention cleaning up qBittorrent unregistered movie torrents (films, Radarr category).
 Use "have_media" when the user asks if a TV show or movie is already in the library (phrases like "do we have", "have you got", "is X downloaded", etc.). Set entities.type to "tv" or "movie" if they specify, otherwise leave "auto".
+Use "optimize_tv" when the user asks to reduce quality/size of TV shows or optimize TV storage. Use "optimize_movies" for movie-specific requests.
+Use "list_tv_profiles" when they ask for Sonarr quality profiles; use "list_movie_profiles" when they want Radarr quality profiles.
 
 -------------------------
 ENTITY RULES:
@@ -198,6 +203,30 @@ Return:
   "intent": "optimize_movies",
   "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
   "reference": "optimize the largest movies"
+}
+
+User: "optimize my tv shows"
+Return:
+{
+  "intent": "optimize_tv",
+  "entities": { "title":"", "seasonNumber":0, "episodeNumber":0, "type": "tv" },
+  "reference": "optimize my tv shows"
+}
+
+User: "list sonarr profiles"
+Return:
+{
+  "intent": "list_tv_profiles",
+  "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "list sonarr profiles"
+}
+
+User: "list radarr profiles"
+Return:
+{
+  "intent": "list_movie_profiles",
+  "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "list radarr profiles"
 }
 
 User: "do we have luther season 3?"

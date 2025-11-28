@@ -99,6 +99,16 @@ export async function getSonarrQualityProfiles() {
   return data || [];
 }
 
+export async function runSeriesSearch(seriesIds = []) {
+  if (!Array.isArray(seriesIds) || seriesIds.length === 0) return;
+  const body = {
+    name: "SeriesSearch",
+    seriesIds
+  };
+  const { data } = await client.post("/api/v3/command", body);
+  return data;
+}
+
 export async function addSeries(series, { rootFolderPath, qualityProfileId }) {
   const payload = {
     title: series.title,

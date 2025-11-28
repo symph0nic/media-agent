@@ -76,7 +76,12 @@ describe("optimize handler flows", () => {
     });
 
     expect(bot.deleteMessage).toHaveBeenCalledWith(7, 222);
-    expect(bot.deleteMessage).toHaveBeenCalledWith(7, 111);
+    expect(bot.editMessageText).toHaveBeenCalledWith("❌ Optimization cancelled.", {
+      chat_id: 7,
+      message_id: 111,
+      parse_mode: "Markdown",
+      reply_markup: { inline_keyboard: [] }
+    });
     expect(pending[7]).toBeUndefined();
   });
 
@@ -104,7 +109,15 @@ describe("optimize handler flows", () => {
     });
 
     expect(bot.deleteMessage).toHaveBeenCalledWith(9, 444);
-    expect(bot.deleteMessage).toHaveBeenCalledWith(9, 333);
+    expect(bot.editMessageText).toHaveBeenCalledWith(
+      expect.stringContaining("Optimization started for 2 movie(s)"),
+      expect.objectContaining({
+        chat_id: 9,
+        message_id: 333,
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: [] }
+      })
+    );
     expect(mockEditMoviesQualityProfile).toHaveBeenCalledWith([1, 2], 55);
     expect(mockSearchMovies).toHaveBeenCalledWith([1, 2]);
     expect(pending[9]).toBeUndefined();

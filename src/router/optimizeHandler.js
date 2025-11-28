@@ -2,6 +2,7 @@ import { listAllMovies, getRadarrQualityProfiles, editMoviesQualityProfile, sear
 import { pending } from "../state/pending.js";
 import { formatBytes } from "../tools/format.js";
 import { logError, logInfo } from "../logger.js";
+import { safeEditMessage } from "../telegram/safeEdit.js";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -151,19 +152,16 @@ export async function handleOptimizeCallback(bot, query) {
   }
 
   if (data === "optm_cancel") {
-    if (state.selectionMessageId) {
-      try {
-        await bot.deleteMessage(chatId, state.selectionMessageId);
-      } catch (_) {}
-    }
-    if (state.summaryMessageId) {
-      try {
-        await bot.deleteMessage(chatId, state.summaryMessageId);
-      } catch (_) {}
-    }
+    await deleteSelectionMessage(bot, chatId, state);
+    await replaceSummaryMessage(
+      bot,
+      chatId,
+      state,
+      "❌ Optimization cancelled."
+    );
     delete pending[chatId];
-    await bot.answerCallbackQuery(query.id);
-    return bot.sendMessage(chatId, "Optimization cancelled.");
+    await bot.answerCallbackQuery(query.id, { text: "Cancelled." });
+    return;
   }
 
   if (data === "optm_pick") {
@@ -227,26 +225,16 @@ export async function handleOptimizeCallback(bot, query) {
       return;
     }
 
-    // tidy picker message if it exists
-    if (state.selectionMessageId) {
-      try {
-        await bot.deleteMessage(chatId, state.selectionMessageId);
-      } catch (_) {}
-      delete state.selectionMessageId;
-    }
-    if (state.summaryMessageId) {
-      try {
-        await bot.deleteMessage(chatId, state.summaryMessageId);
-      } catch (_) {}
-      delete state.summaryMessageId;
-    }
+    await deleteSelectionMessage(bot, chatId, state);
 
     await bot.answerCallbackQuery(query.id, { text: "Optimizing…" });
     try {
       await editMoviesQualityProfile(ids, state.targetProfileId);
       await searchMovies(ids);
-      await bot.sendMessage(
+      await replaceSummaryMessage(
+        bot,
         chatId,
+        state,
         `✅ Optimization started for ${ids.length} movie(s). Radarr will grab smaller releases if available.`
       );
     } catch (err) {
@@ -254,8 +242,10 @@ export async function handleOptimizeCallback(bot, query) {
         ? JSON.stringify(err.response.data)
         : err.message;
       logError(`[optimize] apply failed: ${detail}`);
-      await bot.sendMessage(
+      await replaceSummaryMessage(
+        bot,
         chatId,
+        state,
         "❌ Could not start optimization. Check Radarr connectivity and quality profile."
       );
     }
@@ -265,4 +255,30 @@ export async function handleOptimizeCallback(bot, query) {
   }
 
   await bot.answerCallbackQuery(query.id);
+}
+
+async function deleteSelectionMessage(bot, chatId, state) {
+  if (state.selectionMessageId) {
+    try {
+      await bot.deleteMessage(chatId, state.selectionMessageId);
+    } catch (_) {}
+    delete state.selectionMessageId;
+  }
+}
+
+async function replaceSummaryMessage(bot, chatId, state, text) {
+  if (state.summaryMessageId) {
+    try {
+      await safeEditMessage(bot, chatId, state.summaryMessageId, text, {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: [] }
+      });
+      delete state.summaryMessageId;
+      return;
+    } catch (err) {
+      logError(`[optimize] failed to edit summary message: ${err.message}`);
+    }
+  }
+
+  await bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
 }

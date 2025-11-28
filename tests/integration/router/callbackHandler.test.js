@@ -12,6 +12,8 @@ const mockAddSeries = jest.fn();
 const mockAddMovie = jest.fn();
 const mockEditMoviesQualityProfile = jest.fn();
 const mockSearchMovies = jest.fn();
+const mockHandleAddMedia = jest.fn();
+const mockHandleAddMediaCallback = jest.fn();
 
 jest.unstable_mockModule("../../../src/tools/sonarr.js", () => ({
   deleteEpisodeFile: mockDeleteEpisodeFile,
@@ -38,6 +40,11 @@ jest.unstable_mockModule("../../../src/tools/radarr.js", () => ({
   editMoviesQualityProfile: mockEditMoviesQualityProfile,
   searchMovies: mockSearchMovies,
   listAllMovies: jest.fn().mockResolvedValue([])
+}));
+
+jest.unstable_mockModule("../../../src/router/addMediaHandler.js", () => ({
+  handleAddMedia: mockHandleAddMedia,
+  handleAddMediaCallback: mockHandleAddMediaCallback
 }));
 
 const mockSafeEditMessage = jest.fn();
@@ -67,6 +74,14 @@ jest.unstable_mockModule("../../../src/config.js", () => ({
 const { handleCallback } = await import("../../../src/router/callbackHandler.js");
 const { pending } = await import("../../../src/state/pending.js");
 
+function encodeTitle(str) {
+  return Buffer.from(str, "utf8")
+    .toString("base64")
+    .replace(/=+$/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+
 describe("callbackHandler redownload actions", () => {
   beforeEach(() => {
     Object.keys(pending).forEach((key) => delete pending[key]);
@@ -76,6 +91,29 @@ describe("callbackHandler redownload actions", () => {
     mockFindSeriesInCache.mockReset();
     mockAddSeries.mockReset();
     mockAddMovie.mockReset();
+    mockHandleAddMedia.mockReset();
+    mockHandleAddMediaCallback.mockReset();
+  });
+
+  test("haveadd callback starts add flow", async () => {
+    const bot = createMockBot({
+      answerCallbackQuery: jest.fn().mockResolvedValue()
+    });
+    mockHandleAddMedia.mockResolvedValue();
+
+    const encoded = encodeTitle("Brand New Show");
+
+    await handleCallback(bot, {
+      id: "cb",
+      data: `haveadd|tv|${encoded}`,
+      message: { chat: { id: 20 }, message_id: 1 }
+    });
+
+    expect(mockHandleAddMedia).toHaveBeenCalledWith(
+      bot,
+      20,
+      expect.objectContaining({ title: "Brand New Show", type: "tv" })
+    );
   });
 
   test("redl_yes deletes file and starts episode search", async () => {

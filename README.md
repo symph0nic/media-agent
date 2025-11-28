@@ -51,6 +51,13 @@ Tidy up Real Housewives of Salt Lake City S3
 ```
 Upon confirmation this will delete and unmonitor the season of the show you have requested. If there's ambiguity in the name you'll be given the option to choose the right show.
 
+### 📺 “Do we have…?” lookup
+Example:
+```
+do we have luther season 3?
+```
+The agent replies conversationally with what’s in Sonarr/Radarr, how much is downloaded, whether it’s monitored, and Plex watch progress. If it spots a cleaned-up show (ended, unmonitored, no files) it tells you it’s been tidied and offers a one-tap “➕ Add” button to bring it back.
+
 ### 🔍 Automatic Series Selection  
 Media Agent auto-selects the first matching show and only asks you to pick a different one if you choose **"Pick different show"**.
 

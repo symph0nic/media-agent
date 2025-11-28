@@ -9,6 +9,7 @@ import { handleQbUnregistered } from "./qbittorrentHandler.js";
 import { handleAddMedia } from "./addMediaHandler.js";
 import { handleShowTop } from "./topHandler.js";
 import { handleOptimizeMovies } from "./optimizeHandler.js";
+import { handleHaveMedia } from "./haveMediaHandler.js";
 
 export async function routeIntent(bot, chatId, intentResult, statusId) {
   const { intent, entities,reference } = intentResult;
@@ -57,6 +58,9 @@ export async function routeIntent(bot, chatId, intentResult, statusId) {
 
     case "optimize_movies":
       return handleOptimizeMovies(bot, chatId, entities, {});
+
+    case "have_media":
+      return handleHaveMedia(bot, chatId, entities);
 
     case "list_fully_watched_tv":
       return handleListFullyWatched(bot, chatId);

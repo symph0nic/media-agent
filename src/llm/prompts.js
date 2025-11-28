@@ -36,6 +36,7 @@ INTENT OPTIONS:
 - "show_top_rated_tv"
 - "show_top_rated_movies"
 - "optimize_movies"
+- "have_media"
 - "help"
 - "unknown"
 
@@ -44,6 +45,7 @@ Use "nas_check_free_space" when the user asks about disk space, storage capacity
 Use "qb_delete_unregistered" when the user asks to clean up qBittorrent unregistered torrents.
 Use "qb_delete_unregistered_tv" when they mention cleaning up qBittorrent unregistered TV torrents (TV shows, series, qbit TV category).
 Use "qb_delete_unregistered_movies" when they mention cleaning up qBittorrent unregistered movie torrents (films, Radarr category).
+Use "have_media" when the user asks if a TV show or movie is already in the library (phrases like "do we have", "have you got", "is X downloaded", etc.). Set entities.type to "tv" or "movie" if they specify, otherwise leave "auto".
 
 -------------------------
 ENTITY RULES:
@@ -196,6 +198,14 @@ Return:
   "intent": "optimize_movies",
   "entities": { "title":"", "seasonNumber":0, "episodeNumber":0 },
   "reference": "optimize the largest movies"
+}
+
+User: "do we have luther season 3?"
+Return:
+{
+  "intent": "have_media",
+  "entities": { "title":"luther", "seasonNumber":3, "episodeNumber":0, "type":"tv" },
+  "reference": "luther season 3"
 }
 
 If unsure:

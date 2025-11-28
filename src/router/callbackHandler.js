@@ -22,8 +22,9 @@ import { loadConfig } from "../config.js";
 import { formatBytes } from "../tools/format.js";
 import { handleQbUnregisteredConfirm } from "./qbittorrentHandler.js";
 import { findSeriesInCache } from "../cache/sonarrCache.js";
-import { handleAddMediaCallback } from "./addMediaHandler.js";
+import { handleAddMedia, handleAddMediaCallback } from "./addMediaHandler.js";
 import { handleOptimizeCallback } from "./optimizeHandler.js";
+import { parseAddCallback, HAVE_ADD_CALLBACK_PREFIX } from "./haveMediaHandler.js";
 import { logError } from "../logger.js";
 
 function formatGb(bytes) {
@@ -67,6 +68,29 @@ export async function handleCallback(bot, query) {
   const chatId = query.message.chat.id;
   const data = query.data;
   const state = pending[chatId];
+
+  if (data.startsWith(`${HAVE_ADD_CALLBACK_PREFIX}|`)) {
+    const payload = parseAddCallback(data);
+    if (!payload?.title) {
+      await bot.answerCallbackQuery(query.id, { text: "Missing title." });
+      return;
+    }
+
+    try {
+      await bot.answerCallbackQuery(query.id, { text: "Adding…" });
+      await handleAddMedia(bot, chatId, {
+        title: payload.title,
+        reference: payload.title,
+        type: payload.kind === "movie" ? "movie" : "tv",
+        seasonNumber: 0,
+        episodeNumber: 0
+      });
+    } catch (err) {
+      console.error("[haveMedia] Failed to start add flow:", err);
+      await bot.sendMessage(chatId, "Couldn't start the add flow right now.");
+    }
+    return;
+  }
 
   if (!state) {
     await bot.answerCallbackQuery(query.id, { text: "No active request." });

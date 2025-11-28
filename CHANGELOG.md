@@ -1,3 +1,9 @@
+## [1.5.0](https://github.com/symph0nic/media-agent/compare/v1.4.1...v1.5.0) (2025-11-28)
+
+### Features
+
+* Added 'do I have' feature. ([81fef73](https://github.com/symph0nic/media-agent/commit/81fef73beb721b883623c7e2e36b0da426ab286e))
+
 ## [1.4.1](https://github.com/symph0nic/media-agent/compare/v1.4.0...v1.4.1) (2025-11-28)
 
 ### Bug Fixes

@@ -1,3 +1,9 @@
+## [1.6.1](https://github.com/symph0nic/media-agent/compare/v1.6.0...v1.6.1) (2025-11-28)
+
+### Bug Fixes
+
+* Optimize to profile ([76fa09e](https://github.com/symph0nic/media-agent/commit/76fa09e889079df8861acb0833f9c02f75ada1af))
+
 ## [1.6.0](https://github.com/symph0nic/media-agent/compare/v1.5.0...v1.6.0) (2025-11-28)
 
 ### Features

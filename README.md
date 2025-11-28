@@ -83,7 +83,7 @@ Ask “free up disk space” and the bot SSHes to your NAS, finds every `@Recycl
 Ask “delete unregistered torrents” and the bot lists tracker-unregistered torrents and asks for confirmation. Scope to TV or movies by saying “delete unregistered tv torrents” or “...movies”.
 
 ### 📉 Optimize movies & TV
-Say “optimize movies” to see the largest UHD/huge titles that can be downgraded to your `OPTIMIZE_TARGET_PROFILE`. The bot shows estimated savings, lets you pick titles, and automatically changes Radarr quality profiles + triggers searches. Use “optimize tv shows” to do the same for Sonarr series (using `OPTIMIZE_TV_TARGET_PROFILE`) so you can reclaim space from bloated 4K seasons.
+Say “optimize movies” to see the largest UHD/huge titles that can be downgraded to your `OPTIMIZE_TARGET_PROFILE`. The bot shows estimated savings, lets you pick titles, and automatically changes Radarr quality profiles + triggers searches. Use “optimize tv shows” to do the same for Sonarr series (using `OPTIMIZE_TV_TARGET_PROFILE`); it inspects the actual episode file qualities so only real 4K-or-higher seasons appear. 
 Add “to <profile>” to target a specific quality (e.g. “optimize tv to sd”), and ask “list tv profiles” / “list movie profiles” to see the available Sonarr/Radarr quality profiles before running an optimization.
 
 ### ➕ Add shows or movies

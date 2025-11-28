@@ -9,6 +9,7 @@ const mockListAllSeries = jest.fn();
 const mockGetSonarrQualityProfiles = jest.fn();
 const mockUpdateSeries = jest.fn();
 const mockRunSeriesSearch = jest.fn();
+const mockGetEpisodes = jest.fn();
 
 jest.unstable_mockModule("../../../src/tools/radarr.js", () => ({
   listAllMovies: mockListAllMovies,
@@ -21,7 +22,8 @@ jest.unstable_mockModule("../../../src/tools/sonarr.js", () => ({
   listAllSeries: mockListAllSeries,
   getSonarrQualityProfiles: mockGetSonarrQualityProfiles,
   updateSeries: mockUpdateSeries,
-  runSeriesSearch: mockRunSeriesSearch
+  runSeriesSearch: mockRunSeriesSearch,
+  getEpisodes: mockGetEpisodes
 }));
 
 const optimizeModule = await import("../../../src/router/optimizeHandler.js");
@@ -44,6 +46,7 @@ describe("optimize handler flows", () => {
     mockGetSonarrQualityProfiles.mockReset();
     mockUpdateSeries.mockReset();
     mockRunSeriesSearch.mockReset();
+    mockGetEpisodes.mockReset();
     Object.keys(pending).forEach((key) => delete pending[key]);
   });
 
@@ -106,7 +109,7 @@ describe("optimize handler flows", () => {
     expect(pending[8]).toBeUndefined();
   });
 
-  test("handleOptimizeShows honors requested profile in reference", async () => {
+  test("handleOptimizeShows inspects series quality even when nothing beats the target", async () => {
     const bot = createMockBot({
       sendMessage: jest.fn().mockResolvedValue({ message_id: 12 })
     });
@@ -120,21 +123,30 @@ describe("optimize handler flows", () => {
     ]);
     mockGetSonarrQualityProfiles.mockResolvedValue([
       { id: 4, name: "Best" },
-      { id: 6, name: "SD" }
+      {
+        id: 6,
+        name: "SD",
+        cutoff: 6,
+        items: [{ quality: { id: 6, name: "SDTV-480p" }, allowed: true }]
+      }
+    ]);
+    mockGetEpisodes.mockImplementation(async () => [
+      { episodeFile: { quality: { quality: { name: "WEBRip-1080p" } } } }
     ]);
 
     await handleOptimizeShows(bot, 9, { reference: "optimize tv to sd" });
 
-    expect(pending[9]).toMatchObject({
-      targetProfileId: 6
-    });
+    expect(mockGetEpisodes).toHaveBeenCalledWith(30);
+    const summaryCall = bot.sendMessage.mock.calls[0];
+    expect(summaryCall[0]).toBe(9);
+    expect(summaryCall[1]).toContain("TV optimization candidates");
   });
 
-  test("handleOptimizeShows stores pending summary context", async () => {
+  test("handleOptimizeShows still responds when defaults are used", async () => {
     const prevMin = process.env.OPTIMIZE_TV_MIN_SIZE_GB;
     const prevProfile = process.env.OPTIMIZE_TV_TARGET_PROFILE;
     process.env.OPTIMIZE_TV_MIN_SIZE_GB = "1";
-    process.env.OPTIMIZE_TV_TARGET_PROFILE = "HD-1080p";
+    process.env.OPTIMIZE_TV_TARGET_PROFILE = "";
 
     const bot = createMockBot({
       sendMessage: jest.fn().mockResolvedValue({ message_id: 77 })
@@ -148,22 +160,25 @@ describe("optimize handler flows", () => {
         qualityProfileId: 5
       }
     ]);
-    mockGetSonarrQualityProfiles.mockResolvedValue([{ id: 3, name: "HD-1080p" }]);
+    mockGetSonarrQualityProfiles.mockResolvedValue([
+      {
+        id: 3,
+        name: "HD-1080p",
+        cutoff: 3,
+        items: [{ quality: { id: 3, name: "HDTV-1080p" }, allowed: true }]
+      }
+    ]);
+    mockGetEpisodes.mockImplementation(async () => [
+      { episodeFile: { quality: { quality: { name: "WEBRip-1080p" } } } }
+    ]);
 
     await handleOptimizeShows(bot, 6, { reference: "" });
 
+    expect(mockGetEpisodes).toHaveBeenCalledWith(20);
     expect(bot.sendMessage).toHaveBeenCalledWith(
       6,
-      expect.stringContaining("TV optimization"),
-      expect.objectContaining({ reply_markup: expect.any(Object) })
+      "No TV results available for that query."
     );
-    expect(pending[6]).toMatchObject({
-      mode: "optimize_tv",
-      kind: "tv",
-      candidates: expect.any(Array),
-      targetProfileId: 3,
-      summaryMessageId: 77
-    });
 
     process.env.OPTIMIZE_TV_MIN_SIZE_GB = prevMin;
     process.env.OPTIMIZE_TV_TARGET_PROFILE = prevProfile;
@@ -313,3 +328,9 @@ describe("optimize handler flows", () => {
     );
   });
 });
+    mockGetEpisodes.mockImplementation(async () => [
+      { episodeFile: { quality: { quality: { name: "WEBDL-2160p" } } } }
+    ]);
+    mockGetEpisodes.mockImplementation(async () => [
+      { episodeFile: { quality: { quality: { name: "WEBRip-2160p" } } } }
+    ]);

@@ -8,7 +8,8 @@ import {
   listAllSeries,
   getSonarrQualityProfiles,
   updateSeries,
-  runSeriesSearch
+  runSeriesSearch,
+  getEpisodes
 } from "../tools/sonarr.js";
 import { pending } from "../state/pending.js";
 import { formatBytes } from "../tools/format.js";
@@ -44,16 +45,39 @@ function estimateSavings(bytes) {
   return Math.max(0, Math.round(bytes * 0.65));
 }
 
-function pickTargetProfile(profiles, targetName) {
-  if (!profiles?.length) return null;
-  const byId = profiles.find((p) => p.id === Number(targetName));
-  if (byId) return byId;
-  if (targetName) {
-    const byName = profiles.find(
-      (p) => p.name?.toLowerCase() === targetName.toLowerCase()
-    );
-    if (byName) return byName;
+function matchProfileByName(profiles, name) {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  if (!lower) return null;
+  if (!Number.isNaN(Number(name))) {
+    const byId = profiles.find((p) => p.id === Number(name));
+    if (byId) return byId;
   }
+  const exact = profiles.find(
+    (p) => (p.name || "").toLowerCase() === lower
+  );
+  if (exact) return exact;
+  const partial = profiles.find((p) =>
+    (p.name || "").toLowerCase().includes(lower)
+  );
+  if (partial) return partial;
+  const resMatch = lower.match(/(\d{3,4})/);
+  if (resMatch) {
+    const res = resMatch[1];
+    const byRes = profiles.find((p) =>
+      (p.name || "").includes(res)
+    );
+    if (byRes) return byRes;
+  }
+  return null;
+}
+
+function pickTargetProfile(profiles, requestedName, fallbackName) {
+  if (!profiles?.length) return null;
+  const requested = matchProfileByName(profiles, requestedName);
+  if (requested) return requested;
+  const fallback = matchProfileByName(profiles, fallbackName);
+  if (fallback) return fallback;
   return profiles[0];
 }
 
@@ -80,6 +104,45 @@ function getSeriesProfileId(series) {
     Number(series.qualityProfile?.id) ||
     0
   );
+}
+
+function qualityResolutionFromName(name = "") {
+  if (!name) return 0;
+  const match = name.match(/(\d{3,4})p/i);
+  if (match) return Number(match[1]);
+  if (/2160|uhd|4k/i.test(name)) return 2160;
+  if (/1440/i.test(name)) return 1440;
+  if (/1080/i.test(name)) return 1080;
+  if (/720/i.test(name)) return 720;
+  if (/480|sd/i.test(name)) return 480;
+  return 0;
+}
+
+function describeQualityName(name, fallback) {
+  if (name) return name;
+  if (fallback) return fallback;
+  return "unknown quality";
+}
+
+function deriveTargetResolution(profile) {
+  if (!profile) return 1080;
+  const items = profile.items || [];
+  if (profile.cutoff) {
+    const cutoffItem = items.find((i) => i.quality?.id === profile.cutoff);
+    if (cutoffItem) {
+      const res = qualityResolutionFromName(cutoffItem.quality?.name || "");
+      if (res > 0) return res;
+    }
+  }
+  const allowed = items.filter((i) => i.allowed !== false);
+  if (allowed.length) {
+    return allowed.reduce(
+      (best, item) =>
+        Math.max(best, qualityResolutionFromName(item.quality?.name || "")),
+      0
+    );
+  }
+  return 1080;
 }
 
 function buildMovieSummary(candidates, targetProfile) {
@@ -124,7 +187,8 @@ export async function handleOptimizeMovies(bot, chatId, entities) {
 
     const targetProfile = pickTargetProfile(
       profiles,
-      requested || getTargetProfileName("movie")
+      requested,
+      getTargetProfileName("movie")
     );
 
     if (!targetProfile) {
@@ -193,7 +257,8 @@ export async function handleOptimizeShows(bot, chatId, entities) {
 
     const targetProfile = pickTargetProfile(
       profiles,
-      requested || getTargetProfileName("tv")
+      requested,
+      getTargetProfileName("tv")
     );
 
     if (!targetProfile) {
@@ -204,7 +269,7 @@ export async function handleOptimizeShows(bot, chatId, entities) {
       return;
     }
 
-    const candidates = seriesList
+    let candidates = seriesList
       .filter((s) => {
         const stats = s.statistics || {};
         const size = stats.sizeOnDisk || s.sizeOnDisk || 0;
@@ -219,6 +284,8 @@ export async function handleOptimizeShows(bot, chatId, entities) {
           (a.statistics?.sizeOnDisk || a.sizeOnDisk || 0)
       )
       .slice(0, limit);
+
+    candidates = await annotateSeriesQuality(candidates, targetProfile);
 
     if (!candidates.length) {
       await bot.sendMessage(chatId, "No TV results available for that query.");
@@ -295,17 +362,46 @@ function buildTvSummary(candidates, targetProfile, profileNames = new Map()) {
     const size = formatBytes(extractSeriesSize(series));
     const estSave = formatBytes(estimateSavings(extractSeriesSize(series)));
     const episodes = stats.episodeFileCount || 0;
-    const profile =
+    const qualityLabel = describeQualityName(
+      series.__qualityInfo?.name,
       series.qualityProfile?.name ||
-      profileNames.get(series.qualityProfileId) ||
-      series.qualityProfileId ||
-      "unknown profile";
+        profileNames.get(series.qualityProfileId) ||
+        series.qualityProfileId ||
+        ""
+    );
     lines.push(
-      `${idx + 1}. ${series.title} — ${size} — ${episodes} files — current profile ${profile} — est save ${estSave}`
+      `${idx + 1}. ${series.title} — ${size} — ${episodes} files — current quality ${qualityLabel} — est save ${estSave}`
     );
   });
 
   return lines.join("\n");
+}
+
+async function annotateSeriesQuality(candidates, targetProfile) {
+  const targetResolution = deriveTargetResolution(targetProfile);
+  const filtered = [];
+  for (const series of candidates) {
+    try {
+      const episodes = await getEpisodes(series.id);
+      let bestName = "";
+      let bestResolution = 0;
+      for (const ep of episodes) {
+        const qName = ep.episodeFile?.quality?.quality?.name;
+        const res = qualityResolutionFromName(qName || "");
+        if (res > bestResolution) {
+          bestResolution = res;
+          bestName = qName || "";
+        }
+      }
+      series.__qualityInfo = { name: bestName, resolution: bestResolution };
+      if (bestResolution > targetResolution) {
+        filtered.push(series);
+      }
+    } catch (err) {
+      logError(`[optimize_tv] failed to inspect series ${series.id}: ${err.message}`);
+    }
+  }
+  return filtered;
 }
 
 export async function handleOptimizeCallback(bot, query) {
@@ -474,10 +570,9 @@ async function applyTvQualityProfile(seriesEntries, targetProfileId) {
   for (const series of seriesEntries) {
     if (!series) continue;
     try {
-      await updateSeries(series.id, {
-        ...series,
-        qualityProfileId: targetProfileId
-      });
+      const payload = { ...series, qualityProfileId: targetProfileId };
+      delete payload.__qualityInfo;
+      await updateSeries(series.id, payload);
     } catch (err) {
       logError(
         `[optimize_tv] failed to update ${series.title || series.id}: ${err.message}`

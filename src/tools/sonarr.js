@@ -21,7 +21,7 @@ export async function getEpisodes(seriesId) {
 
   try {
     const res = await axios.get(
-      `${process.env.SONARR_URL}/api/v3/episode?seriesId=${seriesId}`,
+      `${process.env.SONARR_URL}/api/v3/episode?seriesId=${seriesId}&includeEpisodeFile=true`,
       { headers: { "X-Api-Key": process.env.SONARR_API_KEY } }
     );
 

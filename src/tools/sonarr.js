@@ -59,6 +59,18 @@ export async function runEpisodeSearch(episodeId) {
   return data;
 }
 
+export async function getCommand(commandId) {
+  if (!commandId) return null;
+
+  try {
+    const { data } = await client.get(`/api/v3/command/${commandId}`);
+    return data;
+  } catch (err) {
+    console.error(`[sonarr] Failed to load command ${commandId}:`, err.message);
+    throw err;
+  }
+}
+
 export async function deleteEpisodeFile(episodeFileId) {
   if (!episodeFileId) {
     return { skipped: true };
@@ -66,6 +78,20 @@ export async function deleteEpisodeFile(episodeFileId) {
 
   const { data } = await client.delete(`/api/v3/episodefile/${episodeFileId}`);
   return data;
+}
+
+export async function getEpisodeById(episodeId) {
+  if (!episodeId) return null;
+
+  try {
+    const { data } = await client.get(`/api/v3/episode/${episodeId}`, {
+      params: { includeEpisodeFile: true }
+    });
+    return data;
+  } catch (err) {
+    console.error(`[sonarr] Failed to load episode ${episodeId}:`, err.message);
+    throw err;
+  }
 }
 
 export async function getSeriesById(seriesId) {

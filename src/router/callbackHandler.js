@@ -26,6 +26,7 @@ import { handleAddMedia, handleAddMediaCallback } from "./addMediaHandler.js";
 import { handleOptimizeCallback } from "./optimizeHandler.js";
 import { parseAddCallback, HAVE_ADD_CALLBACK_PREFIX } from "./haveMediaHandler.js";
 import { logError } from "../logger.js";
+import { startRedownloadMonitor } from "../redownload/redownloadMonitor.js";
 
 function formatGb(bytes) {
   if (!bytes || bytes <= 0) return "0Gb";
@@ -127,19 +128,43 @@ export async function handleCallback(bot, query) {
       const result = await runEpisodeSearch(episodeId);
       const success = ["started", "queued"].includes(result?.status);
 
-      if (success) {
+      const seriesTitle = state.selectedSeries?.title || "Episode";
+      const episodeLabel = `S${state.season}E${state.episode}`;
+
+      if (success && result?.id) {
         await safeEditMessage(
           bot,
           chatId,
           query.message.message_id,
-          "🔁 Episode deleted and redownload started!"
+          "🔁 Episode deleted. Monitoring Sonarr for the new download…",
+          { reply_markup: { inline_keyboard: [] } }
+        );
+
+        startRedownloadMonitor({
+          bot,
+          chatId,
+          messageId: query.message.message_id,
+          episodeId,
+          commandId: result.id,
+          previousFileId: epFileId || 0,
+          seriesTitle,
+          episodeLabel
+        });
+      } else if (success) {
+        await safeEditMessage(
+          bot,
+          chatId,
+          query.message.message_id,
+          "🔁 Episode deleted and redownload started!",
+          { reply_markup: { inline_keyboard: [] } }
         );
       } else {
         await safeEditMessage(
           bot,
           chatId,
           query.message.message_id,
-          "⚠️ Episode deleted but redownload may not have started."
+          "⚠️ Episode deleted but redownload may not have started.",
+          { reply_markup: { inline_keyboard: [] } }
         );
       }
     } catch (err) {
@@ -148,7 +173,8 @@ export async function handleCallback(bot, query) {
         bot,
         chatId,
         query.message.message_id,
-        "❌ Episode could not be deleted. File may not exist."
+        "❌ Episode could not be deleted. File may not exist.",
+        { reply_markup: { inline_keyboard: [] } }
       );
     }
 
@@ -321,22 +347,46 @@ if (data === "redl_yes_resolved") {
 
     const result = await runEpisodeSearch(ep.id);
     const success = ["started", "queued"].includes(result?.status);
+    const episodeLabel = `S${season}E${episode}`;
 
-    await safeEditMessage(
-      bot,
-      chatId,
-      query.message.message_id,
-      success
-        ? "🔁 Redownload started for the latest episode."
-        : "⚠️ Episode deletion done, but search may not have started."
-    );
+    if (success && result?.id) {
+      await safeEditMessage(
+        bot,
+        chatId,
+        query.message.message_id,
+        "🔁 Episode deleted. Monitoring Sonarr for the new download…",
+        { reply_markup: { inline_keyboard: [] } }
+      );
+
+      startRedownloadMonitor({
+        bot,
+        chatId,
+        messageId: query.message.message_id,
+        episodeId: ep.id,
+        commandId: result.id,
+        previousFileId: ep.episodeFileId || 0,
+        seriesTitle: selected.title,
+        episodeLabel
+      });
+    } else {
+      await safeEditMessage(
+        bot,
+        chatId,
+        query.message.message_id,
+        success
+          ? "🔁 Redownload started for the latest episode."
+          : "⚠️ Episode deletion done, but search may not have started.",
+        { reply_markup: { inline_keyboard: [] } }
+      );
+    }
   } catch (err) {
     console.error("[callback] redl_yes_resolved failed:", err);
     await safeEditMessage(
       bot,
       chatId,
       query.message.message_id,
-      "❌ Could not start redownload."
+      "❌ Could not start redownload.",
+      { reply_markup: { inline_keyboard: [] } }
     );
   }
 

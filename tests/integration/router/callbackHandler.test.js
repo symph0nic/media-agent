@@ -3,6 +3,8 @@ import { createMockBot } from "../../helpers/mockBot.js";
 
 const mockDeleteEpisodeFile = jest.fn();
 const mockRunEpisodeSearch = jest.fn();
+const mockGetCommand = jest.fn();
+const mockGetEpisodeById = jest.fn();
 const mockGetEpisodes = jest.fn();
 const mockFindEpisode = jest.fn();
 const mockGetSeriesById = jest.fn();
@@ -28,6 +30,8 @@ jest.unstable_mockModule("../../../src/tools/sonarr.js", () => ({
   listAllSeries: mockListAllSeries,
   getSonarrQualityProfiles: mockGetSonarrQualityProfiles,
   runSeriesSearch: mockRunSeriesSearch,
+  getCommand: mockGetCommand,
+  getEpisodeById: mockGetEpisodeById,
   addSeries: mockAddSeries,
   getSonarrRootFolders: jest.fn().mockResolvedValue([{ path: "/tv" }]),
   lookupSeries: jest.fn().mockResolvedValue([])
@@ -66,6 +70,12 @@ jest.unstable_mockModule("../../../src/router/tvHandler.js", () => ({
   handleRedownload: mockHandleRedownload
 }));
 
+const mockStartRedownloadMonitor = jest.fn();
+
+jest.unstable_mockModule("../../../src/redownload/redownloadMonitor.js", () => ({
+  startRedownloadMonitor: mockStartRedownloadMonitor
+}));
+
 const mockFindSeriesInCache = jest.fn();
 
 jest.unstable_mockModule("../../../src/cache/sonarrCache.js", () => ({
@@ -93,11 +103,14 @@ describe("callbackHandler redownload actions", () => {
     mockSafeEditMessage.mockReset();
     mockDeleteEpisodeFile.mockReset();
     mockRunEpisodeSearch.mockReset();
+    mockGetCommand.mockReset();
+    mockGetEpisodeById.mockReset();
     mockFindSeriesInCache.mockReset();
     mockAddSeries.mockReset();
     mockAddMovie.mockReset();
     mockHandleAddMedia.mockReset();
     mockHandleAddMediaCallback.mockReset();
+    mockStartRedownloadMonitor.mockReset();
   });
 
   test("haveadd callback starts add flow", async () => {
@@ -147,7 +160,8 @@ describe("callbackHandler redownload actions", () => {
       bot,
       1,
       10,
-      "🔁 Episode deleted and redownload started!"
+      "🔁 Episode deleted and redownload started!",
+      expect.objectContaining({ reply_markup: { inline_keyboard: [] } })
     );
     expect(pending[1]).toBeUndefined();
   });
@@ -184,7 +198,8 @@ describe("callbackHandler redownload actions", () => {
       bot,
       3,
       30,
-      "🔁 Redownload started for the latest episode."
+      "🔁 Redownload started for the latest episode.",
+      expect.objectContaining({ reply_markup: { inline_keyboard: [] } })
     );
     expect(pending[3]).toBeUndefined();
   });

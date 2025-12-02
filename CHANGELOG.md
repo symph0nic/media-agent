@@ -1,3 +1,9 @@
+## [1.7.0](https://github.com/symph0nic/media-agent/compare/v1.6.2...v1.7.0) (2025-12-02)
+
+### Features
+
+* Added download monitoring for redownload scenarios. ([2cd9fdd](https://github.com/symph0nic/media-agent/commit/2cd9fddb3654dd1cf5e9e381916eb2703696498b))
+
 ## [1.6.2](https://github.com/symph0nic/media-agent/compare/v1.6.1...v1.6.2) (2025-11-28)
 
 ### Bug Fixes

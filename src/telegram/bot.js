@@ -27,7 +27,19 @@ export async function startTelegramBot(config) {
   
 
   // After bot starts polling
-  bot.on("polling_error", console.error);
+  bot.on("polling_error", (err = {}) => {
+    const message =
+      err.message || err.description || "Unknown Telegram polling error";
+    const code = err.code || err.response?.body?.error_code || "unknown";
+
+    // Network hiccups (ECONNRESET, timeout, etc.) are expected — log succinctly.
+    if (code === "ECONNRESET" || message.includes("ECONNRESET") || code === "EFATAL") {
+      logError(`[telegram] Polling transient error (${code}): ${message}`);
+      return;
+    }
+
+    console.error(err);
+  });
 
   // Send startup message with quick examples
   const examples = [

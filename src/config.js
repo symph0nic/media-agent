@@ -25,6 +25,7 @@ export function loadConfig() {
     RADARR_API_KEY: process.env.RADARR_API_KEY,
     RADARR_DEFAULT_ROOT: process.env.RADARR_DEFAULT_ROOT,
     RADARR_DEFAULT_PROFILE: process.env.RADARR_DEFAULT_PROFILE,
+    TMDB_API_KEY: process.env.TMDB_API_KEY,
 
     // Plex
     PLEX_URL: process.env.PLEX_URL,

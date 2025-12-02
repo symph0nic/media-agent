@@ -26,6 +26,7 @@ INTENT OPTIONS:
 - "download_season"
 - "download_next_season"
 - "advance_show"
+- "download_movie_series"
 - "add_tv"
 - "add_movie"
 - "add_media"
@@ -57,6 +58,7 @@ Use "list_tv_profiles" when they ask for Sonarr quality profiles; use "list_movi
 Use "download_season" when the user explicitly asks to download a specific season (mentions a season number like "download taskmaster season 2").
 Use "download_next_season" when they ask to download "the next season" of a show without giving a number (phrases such as "download the next taskmaster").
 Use "advance_show" when they ask to tidy the last finished season and automatically download the next one (phrases like "advance taskmaster", "download and tidy taskmaster", or "progress taskmaster").
+Use "download_movie_series" when they ask to add/download an entire movie franchise/collection ("download the final destination movies", "add the entire john wick series").
 
 -------------------------
 ENTITY RULES:
@@ -137,6 +139,14 @@ Return:
   "intent":"advance_show",
   "entities":{ "title":"taskmaster", "seasonNumber":0, "episodeNumber":0 },
   "reference": "advance taskmaster"
+}
+
+User: "download the final destination movies"
+Return:
+{
+  "intent":"download_movie_series",
+  "entities":{ "title":"final destination", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "the final destination movies"
 }
 
 User: "free up disk space"

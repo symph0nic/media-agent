@@ -63,6 +63,13 @@ Use `download <show> s<number>` when you want a specific missing season pulled d
 Say “download the next <show>” if you just want whatever comes after where you are today—the agent inspects Plex continue-watching data to figure it out.
 `advance <show>` runs the clever catch-up flow: it tidies the most recently fully watched season (delete + unmonitor) and immediately downloads the next one so you can keep pushing through old series.
 
+### 🎞 Download a Movie Series
+Example:
+```
+download the final destination movies
+```
+Media Agent will search TMDb for that franchise, confirm the list of titles, and then add every movie to Radarr (skipping ones you already have). Each movie is monitored and a search is triggered immediately. Requires `TMDB_API_KEY`.
+
 ### 📺 “Do we have…?” lookup
 Example:
 ```
@@ -167,6 +174,7 @@ SONARR_DEFAULT_ROOT=/tv
 SONARR_DEFAULT_PROFILE=HD-1080p
 RADARR_DEFAULT_ROOT=/movies
 RADARR_DEFAULT_PROFILE=Any
+TMDB_API_KEY=your-tmdb-api-key
 # Optimization (movies)
 OPTIMIZE_TARGET_PROFILE=HD-1080p
 OPTIMIZE_MIN_SIZE_GB=40

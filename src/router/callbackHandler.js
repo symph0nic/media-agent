@@ -26,6 +26,7 @@ import { handleAddMedia, handleAddMediaCallback } from "./addMediaHandler.js";
 import { handleOptimizeCallback } from "./optimizeHandler.js";
 import { parseAddCallback, HAVE_ADD_CALLBACK_PREFIX } from "./haveMediaHandler.js";
 import { logError } from "../logger.js";
+import { handleMovieSeriesCallback } from "../router/movieSeriesHandler.js";
 import { startRedownloadMonitor } from "../redownload/redownloadMonitor.js";
 
 function formatGb(bytes) {
@@ -96,6 +97,14 @@ export async function handleCallback(bot, query) {
   if (!state) {
     await bot.answerCallbackQuery(query.id, { text: "No active request." });
     return;
+  }
+
+  if (data.startsWith("ms_")) {
+    const handled = await handleMovieSeriesCallback(bot, query);
+    if (handled !== false) {
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
   }
 
   // Media add flow shortcuts

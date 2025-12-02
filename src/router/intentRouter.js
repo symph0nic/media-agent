@@ -7,6 +7,29 @@ import {
   handleDownloadNextSeason,
   handleAdvanceShow
 } from "./tvHandler.js";
+import { handleDownloadMovieSeries } from "./movieSeriesHandler.js";
+
+function shouldRouteToMovieSeries(intent, entities, reference) {
+  if (!reference) return false;
+  const ref = reference.toLowerCase();
+  if (!ref) return false;
+
+  const hasTitle = !!(entities?.title || "").trim();
+  const keywords = ["series", "collection", "franchise", "saga", "anthology"];
+  if (keywords.some((word) => ref.includes(word))) {
+    return true;
+  }
+
+  if (ref.includes("all ") && (ref.includes("movies") || ref.includes("films"))) {
+    return true;
+  }
+
+  if ((ref.endsWith(" movies") || ref.endsWith(" films")) && hasTitle) {
+    return true;
+  }
+
+  return false;
+}
 import { handleNasRecycleBin, handleNasFreeSpace } from "./nasHandler.js";
 import { handleQbUnregistered } from "./qbittorrentHandler.js";
 import { handleAddMedia } from "./addMediaHandler.js";
@@ -20,7 +43,7 @@ import {
 import { handleHaveMedia } from "./haveMediaHandler.js";
 
 export async function routeIntent(bot, chatId, intentResult, statusId) {
-  const { intent, entities,reference } = intentResult;
+  const { intent, entities, reference } = intentResult;
 
   entities.reference = reference;
 
@@ -30,6 +53,12 @@ export async function routeIntent(bot, chatId, intentResult, statusId) {
     case "add_tv":
       entities.type =
         intent === "add_movie" ? "movie" : intent === "add_tv" ? "tv" : entities.type || "auto";
+      if (
+        intent !== "add_tv" &&
+        shouldRouteToMovieSeries(intent, entities, reference)
+      ) {
+        return handleDownloadMovieSeries(bot, chatId, entities, statusId);
+      }
       return handleAddMedia(bot, chatId, entities);
 
     case "tidy_tv":
@@ -47,6 +76,9 @@ export async function routeIntent(bot, chatId, intentResult, statusId) {
 
     case "advance_show":
       return handleAdvanceShow(bot, chatId, entities, statusId);
+
+    case "download_movie_series":
+      return handleDownloadMovieSeries(bot, chatId, entities, statusId);
 
     case "nas_empty_recycle_bin":
       return handleNasRecycleBin(bot, chatId);

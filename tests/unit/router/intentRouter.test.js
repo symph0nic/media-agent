@@ -11,6 +11,7 @@ const mockHandleNasRecycleBin = jest.fn();
 const mockHandleNasFreeSpace = jest.fn();
 const mockHandleQbUnregistered = jest.fn();
 const mockHandleAddMedia = jest.fn();
+const mockHandleDownloadMovieSeries = jest.fn();
 
 jest.unstable_mockModule("../../../src/router/tvHandler.js", () => ({
   handleRedownload: mockHandleRedownload,
@@ -32,6 +33,10 @@ jest.unstable_mockModule("../../../src/router/qbittorrentHandler.js", () => ({
 
 jest.unstable_mockModule("../../../src/router/addMediaHandler.js", () => ({
   handleAddMedia: mockHandleAddMedia
+}));
+
+jest.unstable_mockModule("../../../src/router/movieSeriesHandler.js", () => ({
+  handleDownloadMovieSeries: mockHandleDownloadMovieSeries
 }));
 
 const { routeIntent } = await import("../../../src/router/intentRouter.js");
@@ -106,6 +111,21 @@ describe("routeIntent", () => {
     );
   });
 
+  test("routes download movie series intent", async () => {
+    const bot = createMockBot();
+    await routeIntent(
+      bot,
+      15,
+      { intent: "download_movie_series", entities: { title: "Final Destination" }, reference: "final destination" }
+    );
+    expect(mockHandleDownloadMovieSeries).toHaveBeenCalledWith(
+      bot,
+      15,
+      expect.objectContaining({ reference: "final destination" }),
+      undefined
+    );
+  });
+
   test("routes list fully watched intent", async () => {
     const bot = createMockBot();
     await routeIntent(bot, 1, { intent: "list_fully_watched_tv", entities: {}, reference: "x" });
@@ -151,6 +171,21 @@ describe("routeIntent", () => {
       bot,
       9,
       expect.objectContaining({ reference: "Either" })
+    );
+  });
+
+  test("detects movie series phrasing inside add_movie intent", async () => {
+    const bot = createMockBot();
+    await routeIntent(
+      bot,
+      21,
+      { intent: "add_movie", entities: { title: "Final Destination" }, reference: "final destination movies" }
+    );
+    expect(mockHandleDownloadMovieSeries).toHaveBeenCalledWith(
+      bot,
+      21,
+      expect.objectContaining({ reference: "final destination movies" }),
+      undefined
     );
   });
 

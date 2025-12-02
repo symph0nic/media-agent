@@ -1,3 +1,9 @@
+## [1.8.0](https://github.com/symph0nic/media-agent/compare/v1.7.0...v1.8.0) (2025-12-02)
+
+### Features
+
+* Added 'download specific season', 'download next <show>','download <show> s<number', 'advance <show>', which tidies the most recently watched and downloads the next season. ([a9ca499](https://github.com/symph0nic/media-agent/commit/a9ca4998501e0a77f40dc3f03518a1481bd19cd3))
+
 ## [1.7.0](https://github.com/symph0nic/media-agent/compare/v1.6.2...v1.7.0) (2025-12-02)
 
 ### Features

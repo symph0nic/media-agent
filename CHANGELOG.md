@@ -1,3 +1,9 @@
+## [1.8.1](https://github.com/symph0nic/media-agent/compare/v1.8.0...v1.8.1) (2025-12-02)
+
+### Bug Fixes
+
+* ECONNREST error handling improvement ([3e77a50](https://github.com/symph0nic/media-agent/commit/3e77a5067b7b83e3babc44388486e46f460ade0e))
+
 ## [1.8.0](https://github.com/symph0nic/media-agent/compare/v1.7.0...v1.8.0) (2025-12-02)
 
 ### Features

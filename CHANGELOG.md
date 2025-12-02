@@ -1,3 +1,9 @@
+## [1.9.0](https://github.com/symph0nic/media-agent/compare/v1.8.1...v1.9.0) (2025-12-02)
+
+### Features
+
+* Added 'add movie series' feature ([777f6d6](https://github.com/symph0nic/media-agent/commit/777f6d6fc82c9c6fde5bcb413e27f7ebcf16308b))
+
 ## [1.8.1](https://github.com/symph0nic/media-agent/compare/v1.8.0...v1.8.1) (2025-12-02)
 
 ### Bug Fixes

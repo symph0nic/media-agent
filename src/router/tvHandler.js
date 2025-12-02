@@ -3,7 +3,10 @@
 import {
   getEpisodes,
   findEpisode,
-  getSeriesById
+  getSeriesById,
+  runSeasonSearch,
+  deleteEpisodeFile,
+  updateSeries
 } from "../tools/sonarr.js";
 
 import {
@@ -54,6 +57,140 @@ function formatGb(bytes) {
   const roundedInt = Math.round(gb);
   if (Math.abs(gb - roundedInt) < 0.05) return `${roundedInt}Gb`;
   return `${gb.toFixed(1)}Gb`;
+}
+
+function formatSeasonList(seasonNumbers = []) {
+  if (seasonNumbers.length === 0) return "";
+  if (seasonNumbers.length === 1) {
+    return `season ${seasonNumbers[0]}`;
+  }
+
+  const allButLast = seasonNumbers.slice(0, -1);
+  const last = seasonNumbers[seasonNumbers.length - 1];
+  const prefix = allButLast.length === 1 ? `season ${allButLast[0]}` : `seasons ${allButLast.join(", ")}`;
+  return `${prefix} and ${last}`;
+}
+
+function findLatestFinishedSeason(seriesData, plexSeasonMap) {
+  if (plexSeasonMap?.size) {
+    const finished = Array.from(plexSeasonMap.values())
+      .filter(
+        (season) =>
+          Number(season.leafCount || 0) > 0 &&
+          Number(season.viewedLeafCount || 0) >= Number(season.leafCount || 0)
+      )
+      .map((season) => Number(season.seasonNumber))
+      .filter((num) => Number.isFinite(num) && num > 0);
+    if (finished.length > 0) {
+      return Math.max(...finished);
+    }
+  }
+
+  const withFiles = (seriesData?.seasons || []).filter(
+    (s) => Number(s.statistics?.episodeFileCount || 0) > 0
+  );
+  if (withFiles.length > 0) {
+    return Math.max(...withFiles.map((s) => Number(s.seasonNumber)));
+  }
+
+  return 0;
+}
+
+async function ensureSeasonMonitored(seriesId, seasonNumber, seriesData = null) {
+  const data = seriesData || (await getSeriesById(seriesId));
+  let changed = false;
+
+  data.seasons = (data.seasons || []).map((season) => {
+    if (Number(season.seasonNumber) === Number(seasonNumber)) {
+      if (!season.monitored) {
+        changed = true;
+        return { ...season, monitored: true };
+      }
+    }
+    return season;
+  });
+
+  if (changed) {
+    data.monitored = true;
+    await updateSeries(seriesId, data);
+  }
+
+  return data;
+}
+
+async function triggerSeasonDownload(seriesId, seasonNumber, seriesData = null) {
+  await ensureSeasonMonitored(seriesId, seasonNumber, seriesData);
+  const command = await runSeasonSearch(seriesId, seasonNumber);
+  const status = (command?.status || "").toLowerCase();
+  const success = ["started", "queued"].includes(status);
+  return { success, command };
+}
+
+async function tidySeasonAutomated(seriesId, seasonNumber) {
+  const episodes = await getEpisodes(seriesId);
+  const seasonEpisodes = episodes.filter((e) => e.seasonNumber === seasonNumber);
+
+  let deletedCount = 0;
+  for (const ep of seasonEpisodes) {
+    if (!ep.episodeFileId) continue;
+    try {
+      await deleteEpisodeFile(ep.episodeFileId);
+      deletedCount++;
+    } catch (err) {
+      console.error(`[tvHandler] Failed to delete file ${ep.episodeFileId}:`, err.message);
+    }
+  }
+
+  const seriesData = await getSeriesById(seriesId);
+  const targetSeason = (seriesData.seasons || []).find(
+    (s) => Number(s.seasonNumber) === Number(seasonNumber)
+  );
+  const sizeOnDisk = targetSeason?.statistics?.sizeOnDisk || 0;
+
+  seriesData.seasons = (seriesData.seasons || []).map((season) => ({
+    ...season,
+    monitored: Number(season.seasonNumber) === Number(seasonNumber) ? false : season.monitored
+  }));
+  seriesData.monitored = true;
+
+  await updateSeries(seriesId, seriesData);
+
+  return {
+    deletedCount,
+    sizeOnDisk,
+    seriesData
+  };
+}
+
+async function resolveContinueWatchingMatch(reference, config, strict = false) {
+  const cw = await getCurrentlyWatchingShows(config);
+  if (!cw || cw.length === 0) return null;
+
+  if (reference && reference.trim().length > 0) {
+    const literal = fuzzyMatchCW(cw, reference.toLowerCase());
+    if (literal.length > 0) {
+      return literal[0];
+    }
+
+    const options = cw.map((item) => ({
+      title: item.title,
+      season: item.seasonNumber,
+      episode: item.episodeNumber
+    }));
+
+    const llmResult = await resolveCWAmbiguous(config, reference, options);
+    if (llmResult && llmResult.best !== "none") {
+      const match = cw.find(
+        (item) =>
+          item.title === llmResult.best.title &&
+          item.seasonNumber === llmResult.best.season &&
+          item.episodeNumber === llmResult.best.episode
+      );
+      if (match) return match;
+    }
+  }
+
+  return strict ? null : cw[0];
 }
 
 //
@@ -658,6 +795,45 @@ function buildTidyOptionsFromEntries(entries) {
   );
 }
 
+async function selectTidyOption(reference, options, config) {
+  if (!options || options.length === 0) return null;
+
+  const ref = tidyNormalize(reference);
+  const literalMatches = ref
+    ? options.filter((opt) => {
+        const title = tidyNormalize(opt.title);
+        return ref.includes(title) || title.includes(ref);
+      })
+    : [];
+
+  if (literalMatches.length > 0) {
+    literalMatches.sort((a, b) => {
+      const recency = (b.lastViewedAt || 0) - (a.lastViewedAt || 0);
+      return recency !== 0 ? recency : b.seasonNumber - a.seasonNumber;
+    });
+    return literalMatches[0];
+  }
+
+  const llmOptions = options.map((opt) => ({
+    title: opt.title,
+    season: opt.seasonNumber
+  }));
+
+  const llmResult = await resolveTidyAmbiguous(config, reference, llmOptions);
+
+  if (!llmResult || llmResult.best === "none") {
+    return null;
+  }
+
+  return (
+    options.find(
+      (opt) =>
+        opt.title === llmResult.best.title &&
+        opt.seasonNumber === llmResult.best.season
+    ) || null
+  );
+}
+
 async function startTidyFromOption(bot, chatId, option, config, statusId) {
   const allSeries = global.sonarrCache || [];
   const matches = findSeriesInCache(allSeries, option.title) || [];
@@ -698,40 +874,13 @@ async function runAmbiguousTidySeason(bot, chatId, reference, statusId) {
       return;
     }
 
-    const ref = tidyNormalize(reference);
-    const literalMatches = options.filter((opt) => {
-      const title = tidyNormalize(opt.title);
-      return ref.includes(title) || title.includes(ref);
-    });
-
-    if (literalMatches.length > 0) {
-      literalMatches.sort((a, b) => {
-        const recency = (b.lastViewedAt || 0) - (a.lastViewedAt || 0);
-        return recency !== 0 ? recency : b.seasonNumber - a.seasonNumber;
-      });
-
-      await startTidyFromOption(bot, chatId, literalMatches[0], config, statusId);
-      return;
-    }
-
-    const llmOptions = options.map((opt) => ({ title: opt.title, season: opt.seasonNumber }));
-    const llmResult = await resolveTidyAmbiguous(config, reference, llmOptions);
-
-    if (!llmResult || llmResult.best === "none") {
-      if (statusId) await clearStatus(bot, chatId, statusId);
-      await bot.sendMessage(chatId, "I couldn't figure out which season to tidy. Tell me the season number?");
-      return;
-    }
-
-    const match = options.find(
-      (opt) =>
-        opt.title === llmResult.best.title &&
-        opt.seasonNumber === llmResult.best.season
-    );
-
+    const match = await selectTidyOption(reference, options, config);
     if (!match) {
       if (statusId) await clearStatus(bot, chatId, statusId);
-      await bot.sendMessage(chatId, "I couldn't find that finished season. Tell me the season number?");
+      await bot.sendMessage(
+        chatId,
+        "I couldn't find that finished season. Tell me the season number?"
+      );
       return;
     }
 
@@ -768,4 +917,292 @@ export async function handleTidySeason(bot, chatId, entities, statusId) {
 
   await runAmbiguousTidySeason(bot, chatId, fallbackRef, statusId);
   console.log("───────────── END TIDY SEASON DEBUG ─────────────\n");
+}
+
+//
+// ─────────────────────────────────────────────
+//  DOWNLOAD & ADVANCE FLOWS
+// ─────────────────────────────────────────────
+//
+
+export async function handleDownloadSeason(bot, chatId, entities, statusId) {
+  const title = (entities.title || "").trim();
+  const reference = (entities.reference || "").trim();
+  const seasonNumber = Number(entities.seasonNumber);
+
+  if (!title && !reference) {
+    await bot.sendMessage(chatId, "I need the show name to download a season.");
+    return;
+  }
+
+  if (!Number.isFinite(seasonNumber) || seasonNumber <= 0) {
+    await bot.sendMessage(chatId, "Please tell me which season number to download.");
+    return;
+  }
+
+  const matches = findSeriesInCache(global.sonarrCache || [], title || reference);
+  if (!matches || matches.length === 0) {
+    await bot.sendMessage(chatId, `I couldn’t find "${title || reference}" in Sonarr.`);
+    return;
+  }
+
+  const selected = matches[0];
+
+  try {
+    if (statusId) {
+      await updateStatus(
+        bot,
+        chatId,
+        statusId,
+        `Starting download for ${selected.title} S${seasonNumber}…`
+      );
+    }
+
+    const seriesData = await getSeriesById(selected.id);
+    const episodes = await getEpisodes(selected.id);
+    const seasonEpisodes = episodes.filter(
+      (ep) => Number(ep.seasonNumber) === Number(seasonNumber)
+    );
+    const hasSeason = (seriesData.seasons || []).some(
+      (s) => Number(s.seasonNumber) === Number(seasonNumber)
+    );
+
+    if (!hasSeason) {
+      await bot.sendMessage(
+        chatId,
+        `${selected.title} doesn’t have a season ${seasonNumber} in Sonarr yet.`
+      );
+      return;
+    }
+
+    const sonarrSeason = (seriesData.seasons || []).find(
+      (s) => Number(s.seasonNumber) === Number(seasonNumber)
+    );
+    const stats = sonarrSeason?.statistics || {};
+    const statsTotal = Number(stats.totalEpisodeCount || 0);
+    const statsDownloaded = Number(stats.episodeFileCount || 0);
+    const totalCount = statsTotal || seasonEpisodes.length;
+    const downloadedCount =
+      statsDownloaded ||
+      seasonEpisodes.filter((ep) => !!ep.episodeFileId).length;
+
+    if (totalCount > 0 && downloadedCount >= totalCount) {
+      await bot.sendMessage(
+        chatId,
+        `✅ *${selected.title}* S${seasonNumber} is already fully downloaded.`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    const result = await triggerSeasonDownload(selected.id, seasonNumber, seriesData);
+
+    await bot.sendMessage(
+      chatId,
+      result.success
+        ? `📥 Started download for *${selected.title}* S${seasonNumber}.`
+        : `⚠️ I couldn't start the download for *${selected.title}* S${seasonNumber}.`,
+      { parse_mode: "Markdown" }
+    );
+  } catch (err) {
+    console.error("[tvHandler] ERROR in handleDownloadSeason:", err);
+    await bot.sendMessage(chatId, "Error starting that download.");
+  } finally {
+    if (statusId) {
+      await clearStatus(bot, chatId, statusId);
+    }
+  }
+}
+
+export async function handleDownloadNextSeason(bot, chatId, entities, statusId) {
+  const reference = (entities.reference || entities.title || "").trim();
+
+  try {
+    if (statusId) {
+      await updateStatus(bot, chatId, statusId, "Checking what you’re watching…");
+    }
+
+    const match = await resolveContinueWatchingMatch(reference, config, true);
+    const lookupTitle = match?.title || reference;
+
+    if (!lookupTitle) {
+      await bot.sendMessage(
+        chatId,
+        "I couldn’t tell which show you meant. Try naming it explicitly?"
+      );
+      return;
+    }
+
+    const seriesMatches = findSeriesInCache(global.sonarrCache || [], lookupTitle);
+    if (!seriesMatches || seriesMatches.length === 0) {
+      await bot.sendMessage(chatId, `I couldn’t find "${lookupTitle}" in Sonarr.`);
+      return;
+    }
+
+    const selected = seriesMatches[0];
+    const seriesData = await getSeriesById(selected.id);
+
+    let plexSeasonMap = new Map();
+    try {
+      const plexShows = await getAllPlexShows(config);
+      const plexMatch = plexShows.find(
+        (show) => show.title?.toLowerCase() === selected.title.toLowerCase()
+      );
+      if (plexMatch) {
+        const plexSeasons = await getPlexSeasons(config, plexMatch.ratingKey);
+        plexSeasonMap = new Map(
+          plexSeasons.map((s) => [Number(s.seasonNumber), s])
+        );
+      }
+    } catch (err) {
+      console.error("[tvHandler] Failed to load Plex seasons:", err.message);
+    }
+
+    let previousSeason = Number(match?.seasonNumber || 0);
+    if (!previousSeason) {
+      previousSeason = findLatestFinishedSeason(seriesData, plexSeasonMap);
+    }
+
+    const nextSeason = previousSeason + 1;
+    if (!Number.isFinite(nextSeason) || nextSeason <= 0) {
+      await bot.sendMessage(chatId, "I couldn't figure out which season comes next.");
+      return;
+    }
+
+    if (plexSeasonMap.size > 0) {
+      const downloadedUnwatched = (seriesData.seasons || [])
+        .filter((s) => Number(s.seasonNumber) > Number(previousSeason))
+        .filter((s) => {
+          const stats = s.statistics || {};
+          const total = Number(stats.totalEpisodeCount || 0);
+          const downloaded = Number(stats.episodeFileCount || 0);
+          if (!total || downloaded < total) return false;
+          const plexSeason = plexSeasonMap.get(Number(s.seasonNumber));
+          if (!plexSeason) return false;
+          const viewed = Number(plexSeason.viewedLeafCount || 0);
+          return viewed === 0;
+        })
+        .map((s) => Number(s.seasonNumber))
+        .sort((a, b) => a - b);
+
+      if (downloadedUnwatched.length > 0) {
+        const listText = formatSeasonList(downloadedUnwatched);
+        await bot.sendMessage(
+          chatId,
+          `✅ You already have ${selected.title} ${listText} downloaded and unwatched.`
+        );
+        return;
+      }
+    }
+
+    const hasSeason = (seriesData.seasons || []).some(
+      (s) => Number(s.seasonNumber) === Number(nextSeason)
+    );
+
+    if (!hasSeason) {
+      await bot.sendMessage(
+        chatId,
+        `${selected.title} doesn't have a season ${nextSeason} in Sonarr yet.`
+      );
+      return;
+    }
+
+    const result = await triggerSeasonDownload(selected.id, nextSeason, seriesData);
+
+    await bot.sendMessage(
+      chatId,
+      result.success
+        ? `📥 Downloading *${selected.title}* S${nextSeason} (next season after S${previousSeason}).`
+        : `⚠️ Couldn't start the download for *${selected.title}* S${nextSeason}.`,
+      { parse_mode: "Markdown" }
+    );
+  } catch (err) {
+    console.error("[tvHandler] ERROR in handleDownloadNextSeason:", err);
+    await bot.sendMessage(chatId, "Error downloading the next season.");
+  } finally {
+    if (statusId) {
+      await clearStatus(bot, chatId, statusId);
+    }
+  }
+}
+
+export async function handleAdvanceShow(bot, chatId, entities, statusId) {
+  const reference = (entities.reference || entities.title || "").trim();
+
+  if (!reference) {
+    await bot.sendMessage(chatId, "Tell me which show you want to advance.");
+    return;
+  }
+
+  try {
+    if (statusId) {
+      await updateStatus(bot, chatId, statusId, "Checking fully watched seasons…");
+    }
+
+    const entries = await getFullyWatchedEntries(config);
+    if (!entries || entries.length === 0) {
+      await bot.sendMessage(chatId, "I couldn’t find any fully watched seasons to tidy.");
+      return;
+    }
+
+    const options = buildTidyOptionsFromEntries(entries);
+    const match = await selectTidyOption(reference, options, config);
+
+    if (!match) {
+      await bot.sendMessage(
+        chatId,
+        "I couldn’t map that to a finished season. Try saying the show name and season number?"
+      );
+      return;
+    }
+
+    const cache = findSeriesInCache(global.sonarrCache || [], match.title) || [];
+    let selected =
+      cache.find((s) => Number(s.id) === Number(match.seriesId)) ||
+      cache[0];
+
+    if (!selected) {
+      await bot.sendMessage(chatId, `I couldn’t find "${match.title}" in Sonarr.`);
+      return;
+    }
+
+    const tidyResult = await tidySeasonAutomated(selected.id, match.seasonNumber);
+    const freed = formatGb(tidyResult.sizeOnDisk);
+
+    const nextSeason = match.seasonNumber + 1;
+    const hasNextSeason = (tidyResult.seriesData?.seasons || []).some(
+      (s) => Number(s.seasonNumber) === Number(nextSeason)
+    );
+
+    let downloadText = "No later season found to download.";
+    if (hasNextSeason) {
+      const downloadResult = await triggerSeasonDownload(
+        selected.id,
+        nextSeason,
+        tidyResult.seriesData
+      );
+      downloadText = downloadResult.success
+        ? `📥 Started downloading S${nextSeason}.`
+        : `⚠️ Tried to download S${nextSeason} but Sonarr didn’t accept the command.`;
+    }
+
+    const tidySummary = tidyResult.deletedCount > 0
+      ? `${tidyResult.deletedCount} files deleted`
+      : "No files were deleted";
+
+    await bot.sendMessage(
+      chatId,
+      `✅ Advanced *${selected.title}*:\n` +
+        `• Tidied S${match.seasonNumber} (${tidySummary}, freed ${freed}).\n` +
+        `• ${downloadText}`,
+      { parse_mode: "Markdown" }
+    );
+  } catch (err) {
+    console.error("[tvHandler] ERROR in handleAdvanceShow:", err);
+    await bot.sendMessage(chatId, "I couldn’t advance that show right now.");
+  } finally {
+    if (statusId) {
+      await clearStatus(bot, chatId, statusId);
+    }
+  }
 }

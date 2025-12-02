@@ -51,6 +51,18 @@ Tidy up Real Housewives of Salt Lake City S3
 ```
 Upon confirmation this will delete and unmonitor the season of the show you have requested. If there's ambiguity in the name you'll be given the option to choose the right show.
 
+### 📥 Download or Advance a Show
+Examples:
+```
+download taskmaster s2
+download the next taskmaster
+advance taskmaster
+```
+
+Use `download <show> s<number>` when you want a specific missing season pulled down.
+Say “download the next <show>” if you just want whatever comes after where you are today—the agent inspects Plex continue-watching data to figure it out.
+`advance <show>` runs the clever catch-up flow: it tidies the most recently fully watched season (delete + unmonitor) and immediately downloads the next one so you can keep pushing through old series.
+
 ### 📺 “Do we have…?” lookup
 Example:
 ```

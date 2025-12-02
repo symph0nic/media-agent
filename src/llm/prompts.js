@@ -23,6 +23,9 @@ INTENT OPTIONS:
 - "redownload_tv"
 - "tidy_tv"
 - "list_fully_watched_tv"
+- "download_season"
+- "download_next_season"
+- "advance_show"
 - "add_tv"
 - "add_movie"
 - "add_media"
@@ -51,6 +54,9 @@ Use "qb_delete_unregistered_movies" when they mention cleaning up qBittorrent un
 Use "have_media" when the user asks if a TV show or movie is already in the library (phrases like "do we have", "have you got", "is X downloaded", etc.). Set entities.type to "tv" or "movie" if they specify, otherwise leave "auto".
 Use "optimize_tv" when the user asks to reduce quality/size of TV shows or optimize TV storage. Use "optimize_movies" for movie-specific requests.
 Use "list_tv_profiles" when they ask for Sonarr quality profiles; use "list_movie_profiles" when they want Radarr quality profiles.
+Use "download_season" when the user explicitly asks to download a specific season (mentions a season number like "download taskmaster season 2").
+Use "download_next_season" when they ask to download "the next season" of a show without giving a number (phrases such as "download the next taskmaster").
+Use "advance_show" when they ask to tidy the last finished season and automatically download the next one (phrases like "advance taskmaster", "download and tidy taskmaster", or "progress taskmaster").
 
 -------------------------
 ENTITY RULES:
@@ -107,6 +113,30 @@ Return:
   "intent":"tidy_tv",
   "entities":{ "title":"destination x", "seasonNumber":1, "episodeNumber":0 },
   "reference": "destination x season 1"
+}
+
+User: "download taskmaster s2"
+Return:
+{
+  "intent":"download_season",
+  "entities":{ "title":"taskmaster", "seasonNumber":2, "episodeNumber":0 },
+  "reference": "download taskmaster s2"
+}
+
+User: "download the next taskmaster"
+Return:
+{
+  "intent":"download_next_season",
+  "entities":{ "title":"taskmaster", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "download the next taskmaster"
+}
+
+User: "advance taskmaster"
+Return:
+{
+  "intent":"advance_show",
+  "entities":{ "title":"taskmaster", "seasonNumber":0, "episodeNumber":0 },
+  "reference": "advance taskmaster"
 }
 
 User: "free up disk space"

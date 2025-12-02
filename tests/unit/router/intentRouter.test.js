@@ -4,6 +4,9 @@ import { createMockBot } from "../../helpers/mockBot.js";
 const mockHandleRedownload = jest.fn();
 const mockHandleListFullyWatched = jest.fn();
 const mockHandleTidySeason = jest.fn();
+const mockHandleDownloadSeason = jest.fn();
+const mockHandleDownloadNextSeason = jest.fn();
+const mockHandleAdvanceShow = jest.fn();
 const mockHandleNasRecycleBin = jest.fn();
 const mockHandleNasFreeSpace = jest.fn();
 const mockHandleQbUnregistered = jest.fn();
@@ -12,7 +15,10 @@ const mockHandleAddMedia = jest.fn();
 jest.unstable_mockModule("../../../src/router/tvHandler.js", () => ({
   handleRedownload: mockHandleRedownload,
   handleListFullyWatched: mockHandleListFullyWatched,
-  handleTidySeason: mockHandleTidySeason
+  handleTidySeason: mockHandleTidySeason,
+  handleDownloadSeason: mockHandleDownloadSeason,
+  handleDownloadNextSeason: mockHandleDownloadNextSeason,
+  handleAdvanceShow: mockHandleAdvanceShow
 }));
 
 jest.unstable_mockModule("../../../src/router/nasHandler.js", () => ({
@@ -56,6 +62,47 @@ describe("routeIntent", () => {
       10,
       expect.objectContaining({ reference: "some ref" }),
       "status"
+    );
+  });
+
+  test("routes download season intent", async () => {
+    const bot = createMockBot();
+    const entities = { title: "Taskmaster", seasonNumber: 2, episodeNumber: 0 };
+    await routeIntent(bot, 2, { intent: "download_season", entities, reference: "taskmaster s2" }, "s");
+    expect(mockHandleDownloadSeason).toHaveBeenCalledWith(
+      bot,
+      2,
+      expect.objectContaining({ reference: "taskmaster s2" }),
+      "s"
+    );
+  });
+
+  test("routes download next season intent", async () => {
+    const bot = createMockBot();
+    const entities = { title: "", seasonNumber: 0, episodeNumber: 0 };
+    await routeIntent(
+      bot,
+      3,
+      { intent: "download_next_season", entities, reference: "taskmaster" },
+      "status"
+    );
+    expect(mockHandleDownloadNextSeason).toHaveBeenCalledWith(
+      bot,
+      3,
+      expect.objectContaining({ reference: "taskmaster" }),
+      "status"
+    );
+  });
+
+  test("routes advance show intent", async () => {
+    const bot = createMockBot();
+    const entities = { title: "", seasonNumber: 0, episodeNumber: 0 };
+    await routeIntent(bot, 4, { intent: "advance_show", entities, reference: "advance taskmaster" }, "stat");
+    expect(mockHandleAdvanceShow).toHaveBeenCalledWith(
+      bot,
+      4,
+      expect.objectContaining({ reference: "advance taskmaster" }),
+      "stat"
     );
   });
 

@@ -71,6 +71,21 @@ export async function getCommand(commandId) {
   }
 }
 
+export async function runSeasonSearch(seriesId, seasonNumber) {
+  if (!seriesId || seasonNumber === undefined || seasonNumber === null) {
+    return null;
+  }
+
+  const body = {
+    name: "SeasonSearch",
+    seriesId,
+    seasonNumber
+  };
+
+  const { data } = await client.post("/api/v3/command", body);
+  return data;
+}
+
 export async function deleteEpisodeFile(episodeFileId) {
   if (!episodeFileId) {
     return { skipped: true };

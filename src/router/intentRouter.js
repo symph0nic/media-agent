@@ -2,7 +2,10 @@
 import {
   handleRedownload,
   handleListFullyWatched,
-  handleTidySeason
+  handleTidySeason,
+  handleDownloadSeason,
+  handleDownloadNextSeason,
+  handleAdvanceShow
 } from "./tvHandler.js";
 import { handleNasRecycleBin, handleNasFreeSpace } from "./nasHandler.js";
 import { handleQbUnregistered } from "./qbittorrentHandler.js";
@@ -31,11 +34,19 @@ export async function routeIntent(bot, chatId, intentResult, statusId) {
 
     case "tidy_tv":
       return handleTidySeason(bot, chatId, entities, statusId);
-;
 
     case "redownload_tv":
       // pass statusId if you’re already using it in bot.js; if not, just drop statusId
       return handleRedownload(bot, chatId, entities, statusId);
+
+    case "download_season":
+      return handleDownloadSeason(bot, chatId, entities, statusId);
+
+    case "download_next_season":
+      return handleDownloadNextSeason(bot, chatId, entities, statusId);
+
+    case "advance_show":
+      return handleAdvanceShow(bot, chatId, entities, statusId);
 
     case "nas_empty_recycle_bin":
       return handleNasRecycleBin(bot, chatId);

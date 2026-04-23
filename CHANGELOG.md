@@ -1,3 +1,9 @@
+## [1.10.0](https://github.com/symph0nic/media-agent/compare/v1.9.0...v1.10.0) (2026-04-23)
+
+### Features
+
+* Add Claude fallback when OpenAI quota is exhausted ([409ffd5](https://github.com/symph0nic/media-agent/commit/409ffd5f166eebe3ca955151b0aa2ece0afe2492))
+
 ## [1.9.0](https://github.com/symph0nic/media-agent/compare/v1.8.1...v1.9.0) (2025-12-02)
 
 ### Features

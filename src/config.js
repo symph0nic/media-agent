@@ -17,6 +17,8 @@ export function loadConfig() {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     OPENAI_MODEL: process.env.OPENAI_MODEL,
     MODEL: process.env.OPENAI_MODEL,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    CLAUDE_MODEL: process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001",
     SONARR_URL: process.env.SONARR_URL,
     SONARR_API_KEY: process.env.SONARR_API_KEY,
     SONARR_DEFAULT_ROOT: process.env.SONARR_DEFAULT_ROOT,

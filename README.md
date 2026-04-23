@@ -3,7 +3,7 @@
 ### Natural-Language Control for Sonarr, Radarr, and NAS Maintenance via Telegram
 
 Media Agent is a Node.js-based automation bot that allows you to manage your media server using natural language via Telegram.  
-It integrates with **Sonarr**, **Radarr**, and (soon) your NAS, providing conversational workflows powered by OpenAI.
+It integrates with **Sonarr**, **Radarr**, and (soon) your NAS, providing conversational workflows powered by OpenAI — with automatic fallback to Claude (Anthropic) when OpenAI quota is exhausted.
 
 This project replaces earlier n8n-based flows with a clean, code-first, transparent architecture.
 
@@ -92,8 +92,8 @@ A unified placeholder shows what the agent is doing:
 
 Perfect for debugging and visibility.
 
-### 🤖 OpenAI-powered Intent Classification  
-All natural-language interpretation passes through an OpenAI model (configurable).
+### 🤖 LLM-powered Intent Classification  
+All natural-language interpretation passes through an OpenAI model (configurable). If the OpenAI quota is exhausted, the agent automatically falls back to Claude (Haiku by default) for the remainder of the session — no restart required, no requests dropped.
 
 ### 🧹 NAS recycle-bin cleanup & disk space
 Ask “free up disk space” and the bot SSHes to your NAS, finds every `@Recycle` under your configured share roots, and shows per-share size/counts. Tiny bins are auto-filtered (<1 MB & <10 files by default), with a “Show all bins” button and “Clear all” still covering everything. Ask “how much disk space?” to see current usage per share (1024-byte math, KB/MB/GB/TB labels).
@@ -122,7 +122,7 @@ Natural language add flow: “add severance” or “add the creator movie”. T
 
 media-agent/
 ├── src/
-│   ├── llm/              # OpenAI classifier
+│   ├── llm/              # LLM classifier (OpenAI → Claude fallback)
 │   ├── router/           # Intent router + per-domain handlers
 │   ├── telegram/         # Bot interface + reply helpers
 │   ├── tools/            # Sonarr/Radarr wrappers (Axios)
@@ -162,6 +162,9 @@ Create a `.env` file (not committed) based on `.env.example`:
 TG_BOT_TOKEN=your-telegram-bot-token
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-4.1-mini
+# Claude fallback — used automatically when OpenAI quota is exhausted
+ANTHROPIC_API_KEY=your-anthropic-api-key
+CLAUDE_MODEL=claude-haiku-4-5-20251001
 
 SONARR_URL=[http://your-sonarr-host:8989](http://your-sonarr-host:8989)
 SONARR_API_KEY=your-sonarr-api-key
